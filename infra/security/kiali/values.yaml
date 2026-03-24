@@ -3,7 +3,6 @@ auth:
 
 external_services:
   prometheus:
-    # URL al Prometheus que provee el stack de observabilidad actual (si esta habilitado) o el de Istio
     url: "http://prometheus.monitoring.svc.cluster.local:9090"
   tracing:
     enabled: true
