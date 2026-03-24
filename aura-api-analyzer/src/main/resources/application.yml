@@ -1,0 +1,79 @@
+spring:
+  application:
+    name: aura-api-analyzer
+  main:
+    banner-mode: off
+  profiles:
+    default: openai
+  ai:
+    model:
+      audio:
+        speech: none
+        transcription: none
+      chat: openai
+      embedding: none
+      image: none
+      moderation: none
+    chat:
+      client:
+        observations:
+          log-prompt: false
+          log-completion: false
+    openai:
+      api-key: ${OPENAI_API_KEY:}
+      chat:
+        options:
+          model: gpt-4o
+    anthropic:
+      api-key: ${ANTHROPIC_API_KEY:}
+      chat:
+        options:
+          model: claude-3-5-sonnet-latest
+    ollama:
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      chat:
+        options:
+          model: llama3.1
+      init:
+        pull-model-strategy: never
+
+server:
+  port: 8080
+
+logging:
+  level:
+    com.auraops: DEBUG
+    org.springframework.ai: INFO
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+---
+spring:
+  config:
+    activate:
+      on-profile: openai
+  ai:
+    model:
+      chat: openai
+---
+spring:
+  config:
+    activate:
+      on-profile: anthropic
+  ai:
+    model:
+      chat: anthropic
+---
+spring:
+  config:
+    activate:
+      on-profile: ollama
+  ai:
+    model:
+      chat: ollama

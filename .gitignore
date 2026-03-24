@@ -1,0 +1,6 @@
+.worktrees/
+docs/
+
+# Gradle
+**/.gradle/
+**/build/

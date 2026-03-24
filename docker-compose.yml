@@ -1,0 +1,15 @@
+services:
+  aura-api-analyzer:
+    build:
+      context: ./aura-api-analyzer
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_AI_OPENAI_API_KEY=${OPENAI_API_KEY:-your_key_here}
+    networks:
+      - aura-network
+
+networks:
+  aura-network:
+    driver: bridge
