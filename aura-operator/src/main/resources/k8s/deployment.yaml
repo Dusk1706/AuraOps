@@ -25,7 +25,7 @@ spec:
               name: http
           env:
             - name: AURAOPS_ANALYZER_BASE_URL
-              value: http://aura-api-analyzer.default.svc.cluster.local:8080
+              value: http://aura-api-analyzer.auraops-system.svc.cluster.local:8080
             - name: AURAOPS_OBSERVABILITY_LOKI_ENABLED
               value: "false"
             - name: AURAOPS_OBSERVABILITY_LOKI_BASE_URL

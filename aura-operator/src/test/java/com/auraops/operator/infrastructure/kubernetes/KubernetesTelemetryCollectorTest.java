@@ -68,8 +68,10 @@ class KubernetesTelemetryCollectorTest {
         when(pods.inNamespace("payments")).thenReturn(namespacedPods);
         when(namespacedPods.withLabels(deployment.getSpec().getSelector().getMatchLabels())).thenReturn(labeledPods);
         when(labeledPods.list()).thenReturn(podList);
-        when(lokiLogCollector.collect(deployment, healerProperties.getMaxTotalLogLines())).thenReturn(List.of("loki line"));
-        when(tempoTraceCollector.collect(deployment)).thenReturn(List.of("traceId=abc123 service=payments-api operation=POST /charge durationMs=845"));
+        when(lokiLogCollector.collectWithStatus(deployment, healerProperties.getMaxTotalLogLines()))
+            .thenReturn(new LokiLogCollector.Result(List.of("loki line"), true, true, null, null));
+        when(tempoTraceCollector.collectWithStatus(deployment))
+            .thenReturn(new TempoTraceCollector.Result(List.of("traceId=abc123 service=payments-api operation=POST /charge durationMs=845"), true, true, null, null));
 
         KubernetesTelemetryCollector collector = new KubernetesTelemetryCollector(
             kubernetesClient,

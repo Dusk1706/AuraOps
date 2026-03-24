@@ -34,8 +34,12 @@ public class LokiLogCollector {
     }
 
     public List<String> collect(Deployment deployment, int maxLines) {
+        return collectWithStatus(deployment, maxLines).logs();
+    }
+
+    public Result collectWithStatus(Deployment deployment, int maxLines) {
         if (!properties.getLoki().isEnabled()) {
-            return List.of();
+            return Result.disabled();
         }
 
         String namespace = deployment.getMetadata().getNamespace();
@@ -56,9 +60,9 @@ public class LokiLogCollector {
                 .uri(uri)
                 .retrieve()
                 .body(String.class);
-            return parse(body, maxLines);
+            return Result.available(parse(body, maxLines));
         } catch (RestClientException ex) {
-            return List.of();
+            return Result.unavailable("LOKI_UNAVAILABLE", ex.getClass().getSimpleName() + ": " + ex.getMessage());
         }
     }
 
@@ -83,6 +87,21 @@ public class LokiLogCollector {
             return logs;
         } catch (Exception ex) {
             return List.of();
+        }
+    }
+
+    public record Result(List<String> logs, boolean enabled, boolean available, String reasonCode, String reason) {
+
+        static Result disabled() {
+            return new Result(List.of(), false, true, null, null);
+        }
+
+        static Result available(List<String> logs) {
+            return new Result(logs == null ? List.of() : logs, true, true, null, null);
+        }
+
+        static Result unavailable(String reasonCode, String reason) {
+            return new Result(List.of(), true, false, reasonCode, reason);
         }
     }
 }

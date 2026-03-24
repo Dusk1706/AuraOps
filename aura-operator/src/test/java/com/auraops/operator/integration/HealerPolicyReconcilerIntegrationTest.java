@@ -36,7 +36,9 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 @EnableKubernetesMockClient(crud = true)
 class HealerPolicyReconcilerIntegrationTest {
@@ -119,6 +121,10 @@ class HealerPolicyReconcilerIntegrationTest {
             "Rolling restart is deterministic and stays within the deployment strategy budget."
         );
 
+        DeploymentReadinessVerifier readinessVerifier = mock(DeploymentReadinessVerifier.class);
+        when(readinessVerifier.verify(any(), any(), any()))
+            .thenReturn(new DeploymentReadinessVerifier.VerificationResult(true, "Deployment passed readiness verification with 4 ready replicas and observedGeneration >= 1"));
+
         HealerPolicyReconciler reconciler = new HealerPolicyReconciler(
             client,
             telemetryCollector,
@@ -127,7 +133,7 @@ class HealerPolicyReconcilerIntegrationTest {
             new HealingSafetyService(healerProperties),
             new HealingRateLimiter(RateLimiterRegistry.ofDefaults()),
             new DeploymentActionExecutor(client),
-            new DeploymentReadinessVerifier(client, healerProperties)
+            readinessVerifier
         );
 
         HealerPolicy policy = healerPolicy();

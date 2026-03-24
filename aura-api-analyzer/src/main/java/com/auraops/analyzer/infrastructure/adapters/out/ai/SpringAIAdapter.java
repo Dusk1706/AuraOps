@@ -12,14 +12,12 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.converter.BeanOutputConverter;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.chat.prompt.PromptTemplate;
-import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
 
 @Component
-@Profile("!e2e")
 public class SpringAIAdapter implements LLMProvider {
 
     private static final int MAX_LOG_LENGTH = 4000; // Roughly 1000 tokens

@@ -6,7 +6,7 @@ services:
     ports:
       - "8080:8080"
     environment:
-      SPRING_PROFILES_ACTIVE: ${AURAOPS_ANALYZER_PROFILE:-e2e}
+      SPRING_PROFILES_ACTIVE: ${AURAOPS_ANALYZER_PROFILE:-ollama}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}

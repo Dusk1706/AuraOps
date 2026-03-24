@@ -32,8 +32,12 @@ public class TempoTraceCollector {
     }
 
     public List<String> collect(Deployment deployment) {
+        return collectWithStatus(deployment).traces();
+    }
+
+    public Result collectWithStatus(Deployment deployment) {
         if (!properties.getTempo().isEnabled()) {
-            return List.of();
+            return Result.disabled();
         }
 
         String namespace = deployment.getMetadata().getNamespace();
@@ -50,9 +54,9 @@ public class TempoTraceCollector {
                     .build())
                 .retrieve()
                 .body(String.class);
-            return parse(body, properties.getTempo().getLimit());
+            return Result.available(parse(body, properties.getTempo().getLimit()));
         } catch (RestClientException ex) {
-            return List.of();
+            return Result.unavailable("TEMPO_UNAVAILABLE", ex.getClass().getSimpleName() + ": " + ex.getMessage());
         }
     }
 
@@ -88,5 +92,20 @@ public class TempoTraceCollector {
     private String text(JsonNode node, String field, String fallback) {
         JsonNode value = node.get(field);
         return value == null || value.isNull() ? fallback : value.asText();
+    }
+
+    public record Result(List<String> traces, boolean enabled, boolean available, String reasonCode, String reason) {
+
+        static Result disabled() {
+            return new Result(List.of(), false, true, null, null);
+        }
+
+        static Result available(List<String> traces) {
+            return new Result(traces == null ? List.of() : traces, true, true, null, null);
+        }
+
+        static Result unavailable(String reasonCode, String reason) {
+            return new Result(List.of(), true, false, reasonCode, reason);
+        }
     }
 }

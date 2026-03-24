@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aura-api-analyzer
+  labels:
+    app.kubernetes.io/name: aura-api-analyzer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: aura-api-analyzer
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: aura-api-analyzer
+    spec:
+      containers:
+        - name: analyzer
+          image: auraops/aura-api-analyzer:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: ollama
+            - name: OLLAMA_BASE_URL
+              value: http://ollama.ollama.svc.cluster.local:11434
+            - name: OPENAI_API_KEY
+              value: ""
+            - name: ANTHROPIC_API_KEY
+              value: ""
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi

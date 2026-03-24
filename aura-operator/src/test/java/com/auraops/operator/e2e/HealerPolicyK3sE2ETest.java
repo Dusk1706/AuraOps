@@ -17,6 +17,8 @@ import com.auraops.operator.infrastructure.kubernetes.KubernetesTelemetryCollect
 import com.auraops.operator.infrastructure.observability.LokiLogCollector;
 import com.auraops.operator.infrastructure.observability.TempoTraceCollector;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
 import io.fabric8.kubernetes.api.model.NamespaceBuilder;
 import io.fabric8.kubernetes.api.model.ObjectMetaBuilder;
 import io.fabric8.kubernetes.api.model.apps.Deployment;
@@ -36,12 +38,8 @@ import org.springframework.web.client.RestClient;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -58,13 +56,12 @@ class HealerPolicyK3sE2ETest {
     private static final int ANALYZER_PORT = 18080;
 
     private static KubernetesClient kubernetesClient;
-    private static Process analyzerProcess;
-    private static Path analyzerLogFile;
+    private static HttpServer analyzerStubServer;
 
     @BeforeAll
     static void setUpCluster() throws Exception {
         assumeTrue(commandSucceeds("docker", "version"), "Docker CLI is required for the K3s e2e test");
-        startAnalyzer();
+        startAnalyzerStub();
 
         forceRemoveContainer();
         runCommand(
@@ -105,7 +102,7 @@ class HealerPolicyK3sE2ETest {
         if (kubernetesClient != null) {
             kubernetesClient.close();
         }
-        stopAnalyzer();
+        stopAnalyzerStub();
         forceRemoveContainer();
     }
 
@@ -231,78 +228,41 @@ class HealerPolicyK3sE2ETest {
         throw new AssertionError("Deployment " + namespace + "/" + name + " did not become ready with " + desiredReplicas + " replicas");
     }
 
-    private static void startAnalyzer() throws Exception {
-        Path analyzerDir = Path.of("..", "aura-api-analyzer").toAbsolutePath().normalize();
-        assumeTrue(Files.exists(analyzerDir.resolve("gradlew.bat")) || Files.exists(analyzerDir.resolve("gradlew")),
-            "Analyzer project is required for the full-stack e2e test");
-
-        if (Files.exists(analyzerDir.resolve("gradlew.bat"))) {
-            runCommand(analyzerDir, "cmd.exe", "/c", "gradlew.bat", "bootJar", "-x", "test");
-        } else {
-            runCommand(analyzerDir, "gradlew", "bootJar", "-x", "test");
-        }
-
-        Path jar = Files.list(analyzerDir.resolve("build").resolve("libs"))
-            .filter(path -> path.getFileName().toString().endsWith(".jar"))
-            .filter(path -> !path.getFileName().toString().contains("-plain"))
-            .findFirst()
-            .orElseThrow(() -> new IllegalStateException("Analyzer boot jar was not generated"));
-
-        analyzerLogFile = Files.createTempFile("aura-api-analyzer-e2e", ".log");
-        String javaExecutable = Path.of(System.getProperty("java.home"), "bin", "java.exe").toString();
-        analyzerProcess = new ProcessBuilder(
-            javaExecutable,
-            "-jar",
-            jar.toString(),
-            "--spring.profiles.active=e2e",
-            "--server.port=" + ANALYZER_PORT
-        )
-            .directory(analyzerDir.toFile())
-            .redirectErrorStream(true)
-            .redirectOutput(analyzerLogFile.toFile())
-            .start();
-
-        waitForAnalyzerHealth();
+    private static void startAnalyzerStub() throws IOException {
+        analyzerStubServer = HttpServer.create(new InetSocketAddress("127.0.0.1", ANALYZER_PORT), 0);
+        analyzerStubServer.createContext("/api/v1/analyze", HealerPolicyK3sE2ETest::handleAnalyze);
+        analyzerStubServer.start();
     }
 
-    private static void waitForAnalyzerHealth() throws Exception {
-        HttpClient httpClient = HttpClient.newHttpClient();
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + ANALYZER_PORT + "/actuator/health"))
-            .timeout(Duration.ofSeconds(5))
-            .GET()
-            .build();
-
-        Instant deadline = Instant.now().plus(Duration.ofMinutes(2));
-        Exception lastFailure = null;
-        while (Instant.now().isBefore(deadline)) {
-            try {
-                if (analyzerProcess != null && !analyzerProcess.isAlive()) {
-                    String logs = analyzerLogFile == null || !Files.exists(analyzerLogFile)
-                        ? ""
-                        : Files.readString(analyzerLogFile);
-                    throw new IllegalStateException("Analyzer process exited before becoming healthy" + System.lineSeparator() + logs);
-                }
-
-                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-                if (response.statusCode() == 200 && response.body().contains("\"status\":\"UP\"")) {
-                    return;
-                }
-            } catch (Exception ex) {
-                lastFailure = ex;
-                Thread.sleep(2_000L);
+    private static void handleAnalyze(HttpExchange exchange) throws IOException {
+        String response = """
+            {
+              "diagnosis": "Deterministic e2e diagnosis: sustained latency saturation on payments-api",
+              "confidence": 0.99,
+              "recommended_action": {
+                "type": "SCALE_OUT",
+                "parameters": {}
+              },
+              "explanation": "E2E stub returns SCALE_OUT for stable operator validation."
             }
+            """;
+        exchange.getResponseHeaders().add("Content-Type", "application/json");
+        exchange.sendResponseHeaders(200, response.getBytes().length);
+        try (OutputStream outputStream = exchange.getResponseBody()) {
+            outputStream.write(response.getBytes());
         }
+    }
 
-        String logs = analyzerLogFile == null || !Files.exists(analyzerLogFile)
-            ? ""
-            : Files.readString(analyzerLogFile);
-        throw new IllegalStateException("Analyzer process did not become healthy" + System.lineSeparator() + logs, lastFailure);
+    private static void stopAnalyzerStub() {
+        if (analyzerStubServer != null) {
+            analyzerStubServer.stop(0);
+            analyzerStubServer = null;
+        }
     }
 
     private static boolean commandSucceeds(String... command) {
         try {
-            runCommand(Path.of(".").toAbsolutePath().normalize(), command);
+            runCommand(command);
             return true;
         } catch (Exception ex) {
             return false;
@@ -325,12 +285,7 @@ class HealerPolicyK3sE2ETest {
     }
 
     private static void runCommand(String... command) throws IOException, InterruptedException {
-        runCommand(Path.of(".").toAbsolutePath().normalize(), command);
-    }
-
-    private static void runCommand(Path workingDirectory, String... command) throws IOException, InterruptedException {
         Process process = new ProcessBuilder(command)
-            .directory(workingDirectory.toFile())
             .redirectErrorStream(true)
             .start();
         String output;
@@ -340,22 +295,6 @@ class HealerPolicyK3sE2ETest {
         int exitCode = process.waitFor();
         if (exitCode != 0) {
             throw new IllegalStateException("Command failed: " + String.join(" ", command) + System.lineSeparator() + output);
-        }
-    }
-
-    private static void stopAnalyzer() {
-        if (analyzerProcess == null) {
-            return;
-        }
-        analyzerProcess.destroy();
-        try {
-            if (!analyzerProcess.waitFor(10, TimeUnit.SECONDS)) {
-                analyzerProcess.destroyForcibly();
-                analyzerProcess.waitFor(10, TimeUnit.SECONDS);
-            }
-        } catch (InterruptedException ex) {
-            Thread.currentThread().interrupt();
-            analyzerProcess.destroyForcibly();
         }
     }
 

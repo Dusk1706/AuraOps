@@ -22,6 +22,11 @@ import java.util.Objects;
 @Component
 public class KubernetesTelemetryCollector {
 
+    public static final String TELEMETRY_STATUS_KEY = "telemetryStatus";
+    public static final String TELEMETRY_REASONS_KEY = "telemetryUnavailableReasons";
+    public static final String TELEMETRY_AVAILABLE = "AVAILABLE";
+    public static final String TELEMETRY_UNAVAILABLE = "TELEMETRY_UNAVAILABLE";
+
     private final KubernetesClient kubernetesClient;
     private final HealerProperties healerProperties;
     private final LokiLogCollector lokiLogCollector;
@@ -43,8 +48,10 @@ public class KubernetesTelemetryCollector {
         String namespace = deployment.getMetadata().getNamespace();
         String deploymentName = deployment.getMetadata().getName();
         List<Pod> pods = loadTargetPods(deployment);
-        List<String> logs = collectLogs(deployment, pods);
-        List<String> traces = tempoTraceCollector.collect(deployment);
+        LokiLogCollector.Result lokiResult = lokiLogCollector.collectWithStatus(deployment, healerProperties.getMaxTotalLogLines());
+        TempoTraceCollector.Result tempoResult = tempoTraceCollector.collectWithStatus(deployment);
+        List<String> logs = collectLogs(deployment, pods, lokiResult);
+        List<String> traces = tempoResult.traces();
         int restartCount = pods.stream()
             .flatMap(pod -> safeContainerStatuses(pod).stream())
             .mapToInt(ContainerStatus::getRestartCount)
@@ -56,6 +63,7 @@ public class KubernetesTelemetryCollector {
         additionalMetrics.put("updatedReplicas", defaulted(deployment.getStatus() == null ? null : deployment.getStatus().getUpdatedReplicas()));
         additionalMetrics.put("observedGeneration", deployment.getStatus() == null ? null : deployment.getStatus().getObservedGeneration());
         additionalMetrics.put("sampledAt", OffsetDateTime.now().toString());
+        addTelemetryStatus(additionalMetrics, lokiResult, tempoResult);
 
         return new IncidentContext(
             namespace + "/" + deploymentName + "/" + OffsetDateTime.now().toEpochSecond(),
@@ -82,8 +90,8 @@ public class KubernetesTelemetryCollector {
         return podList == null || podList.getItems() == null ? List.of() : podList.getItems();
     }
 
-    private List<String> collectLogs(Deployment deployment, List<Pod> pods) {
-        List<String> externalLogs = lokiLogCollector.collect(deployment, healerProperties.getMaxTotalLogLines());
+    private List<String> collectLogs(Deployment deployment, List<Pod> pods, LokiLogCollector.Result lokiResult) {
+        List<String> externalLogs = lokiResult.logs();
         if (!externalLogs.isEmpty()) {
             return externalLogs;
         }
@@ -125,6 +133,34 @@ public class KubernetesTelemetryCollector {
             return List.of("No pod logs were available; using deployment and pod state only.");
         }
         return collected;
+    }
+
+    private void addTelemetryStatus(
+        Map<String, Object> additionalMetrics,
+        LokiLogCollector.Result lokiResult,
+        TempoTraceCollector.Result tempoResult
+    ) {
+        List<String> unavailableReasons = new ArrayList<>();
+        if (lokiResult.enabled() && !lokiResult.available()) {
+            unavailableReasons.add(reason(lokiResult.reasonCode(), lokiResult.reason()));
+        }
+        if (tempoResult.enabled() && !tempoResult.available()) {
+            unavailableReasons.add(reason(tempoResult.reasonCode(), tempoResult.reason()));
+        }
+
+        if (unavailableReasons.isEmpty()) {
+            additionalMetrics.put(TELEMETRY_STATUS_KEY, TELEMETRY_AVAILABLE);
+            additionalMetrics.put(TELEMETRY_REASONS_KEY, List.of());
+            return;
+        }
+        additionalMetrics.put(TELEMETRY_STATUS_KEY, TELEMETRY_UNAVAILABLE);
+        additionalMetrics.put(TELEMETRY_REASONS_KEY, unavailableReasons);
+    }
+
+    private String reason(String code, String message) {
+        String normalizedCode = code == null ? "TELEMETRY_ERROR" : code;
+        String normalizedMessage = message == null ? "No additional details" : message;
+        return normalizedCode + ": " + normalizedMessage;
     }
 
     private String summarizePodState(Pod pod) {

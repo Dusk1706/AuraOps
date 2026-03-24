@@ -57,14 +57,6 @@ management:
 spring:
   config:
     activate:
-      on-profile: e2e
-  ai:
-    model:
-      chat: none
----
-spring:
-  config:
-    activate:
       on-profile: openai
   ai:
     model:

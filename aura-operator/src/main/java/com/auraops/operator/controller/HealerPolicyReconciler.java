@@ -21,6 +21,8 @@ import io.javaoperatorsdk.operator.api.reconciler.UpdateControl;
 import org.springframework.stereotype.Component;
 
 import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 @Component
@@ -69,7 +71,20 @@ public class HealerPolicyReconciler implements Reconciler<HealerPolicy> {
             return UpdateControl.patchStatus(resource);
         }
 
-        AnalyzerDecision decision = analyzerClient.analyze(telemetryCollector.collect(deployment));
+        var incidentContext = telemetryCollector.collect(deployment);
+        if (isTelemetryUnavailable(incidentContext.additionalMetrics())) {
+            updateStatus(
+                resource,
+                HealingPhase.ANALYSIS_BLOCKED,
+                null,
+                0.0,
+                telemetryUnavailableMessage(incidentContext.additionalMetrics()),
+                null
+            );
+            return UpdateControl.patchStatus(resource);
+        }
+
+        AnalyzerDecision decision = analyzerClient.analyze(incidentContext);
         if (decision instanceof AnalyzerDecision.Failure failure) {
             updateStatus(resource, HealingPhase.ANALYSIS_BLOCKED, null, 0.0, failure.message(), null);
             return UpdateControl.patchStatus(resource);
@@ -100,9 +115,23 @@ public class HealerPolicyReconciler implements Reconciler<HealerPolicy> {
         }
 
         actionExecutor.execute(deployment, executableDecision.actionPlan());
+
+        Deployment refreshedDeployment = kubernetesClient.apps().deployments()
+            .inNamespace(deployment.getMetadata().getNamespace())
+            .withName(deployment.getMetadata().getName())
+            .get();
+
+        Long expectedObservedGeneration = null;
+        if (refreshedDeployment != null
+            && refreshedDeployment.getMetadata() != null
+            && refreshedDeployment.getMetadata().getGeneration() != null) {
+            expectedObservedGeneration = refreshedDeployment.getMetadata().getGeneration();
+        }
+
         DeploymentReadinessVerifier.VerificationResult verification = readinessVerifier.verify(
             deployment.getMetadata().getNamespace(),
-            deployment.getMetadata().getName()
+            deployment.getMetadata().getName(),
+            expectedObservedGeneration
         );
         if (!verification.ready()) {
             updateStatus(
@@ -143,5 +172,23 @@ public class HealerPolicyReconciler implements Reconciler<HealerPolicy> {
         status.setObservedDeployment(resource.getSpec().getTargetDeployment());
         status.setTimestamp(OffsetDateTime.now());
         resource.setStatus(status);
+    }
+    private boolean isTelemetryUnavailable(Map<String, Object> additionalMetrics) {
+        if (additionalMetrics == null) {
+            return false;
+        }
+        Object status = additionalMetrics.get(KubernetesTelemetryCollector.TELEMETRY_STATUS_KEY);
+        return KubernetesTelemetryCollector.TELEMETRY_UNAVAILABLE.equals(String.valueOf(status));
+    }
+
+    private String telemetryUnavailableMessage(Map<String, Object> additionalMetrics) {
+        if (additionalMetrics == null) {
+            return "Telemetry is unavailable";
+        }
+        Object reasons = additionalMetrics.get(KubernetesTelemetryCollector.TELEMETRY_REASONS_KEY);
+        if (reasons instanceof List<?> values && !values.isEmpty()) {
+            return "Telemetry unavailable: " + String.join("; ", values.stream().map(String::valueOf).toList());
+        }
+        return "Telemetry unavailable: observability backends are unreachable";
     }
 }

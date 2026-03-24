@@ -84,8 +84,8 @@ class HealerPolicyReconcilerTest {
         when(healingSafetyService.validate(actionPlan, deployment)).thenReturn(new PolicyDecision.Execute(actionPlan));
         when(healingRateLimiter.tryAcquire()).thenReturn(true);
         doNothing().when(actionExecutor).execute(deployment, actionPlan);
-        when(readinessVerifier.verify("payments", "payments-api"))
-            .thenReturn(new DeploymentReadinessVerifier.VerificationResult(true, "Deployment passed readiness verification with 4 ready replicas"));
+        when(readinessVerifier.verify("payments", "payments-api", 1L))
+            .thenReturn(new DeploymentReadinessVerifier.VerificationResult(true, "Deployment passed readiness verification with 4 ready replicas and observedGeneration >= 2"));
 
         var result = reconciler.reconcile(policy, mock(Context.class));
 
@@ -185,7 +185,7 @@ class HealerPolicyReconcilerTest {
         when(policyDecisionService.evaluate(policy, deployment, success)).thenReturn(new PolicyDecision.Execute(actionPlan));
         when(healingSafetyService.validate(actionPlan, deployment)).thenReturn(new PolicyDecision.Execute(actionPlan));
         when(healingRateLimiter.tryAcquire()).thenReturn(true);
-        when(readinessVerifier.verify("payments", "payments-api"))
+        when(readinessVerifier.verify("payments", "payments-api", 1L))
             .thenReturn(new DeploymentReadinessVerifier.VerificationResult(false, "Deployment did not become ready within PT30S"));
 
         reconciler.reconcile(policy, mock(Context.class));
@@ -193,6 +193,67 @@ class HealerPolicyReconcilerTest {
         assertThat(policy.getStatus().getPhase()).isEqualTo("FAILED");
         assertThat(policy.getStatus().getMessage()).contains("did not become ready");
         verify(actionExecutor).execute(deployment, actionPlan);
+    }
+
+    @Test
+    void reconcile_blocksHealingWhenTelemetryIsUnavailable() {
+        KubernetesClient kubernetesClient = mock(KubernetesClient.class, org.mockito.Answers.RETURNS_DEEP_STUBS);
+        KubernetesTelemetryCollector telemetryCollector = mock(KubernetesTelemetryCollector.class);
+        AnalyzerClient analyzerClient = mock(AnalyzerClient.class);
+        PolicyDecisionService policyDecisionService = mock(PolicyDecisionService.class);
+        HealingSafetyService healingSafetyService = mock(HealingSafetyService.class);
+        HealingRateLimiter healingRateLimiter = mock(HealingRateLimiter.class);
+        DeploymentActionExecutor actionExecutor = mock(DeploymentActionExecutor.class);
+        DeploymentReadinessVerifier readinessVerifier = mock(DeploymentReadinessVerifier.class);
+        @SuppressWarnings("unchecked")
+        MixedOperation<Deployment, DeploymentList, RollableScalableResource<Deployment>> deployments = mock(MixedOperation.class);
+        @SuppressWarnings("unchecked")
+        NonNamespaceOperation<Deployment, DeploymentList, RollableScalableResource<Deployment>> namespacedDeployments = mock(NonNamespaceOperation.class);
+        @SuppressWarnings("unchecked")
+        RollableScalableResource<Deployment> deploymentResource = mock(RollableScalableResource.class);
+
+        HealerPolicyReconciler reconciler = new HealerPolicyReconciler(
+            kubernetesClient,
+            telemetryCollector,
+            analyzerClient,
+            policyDecisionService,
+            healingSafetyService,
+            healingRateLimiter,
+            actionExecutor,
+            readinessVerifier
+        );
+
+        HealerPolicy policy = policy();
+        Deployment deployment = deployment();
+        IncidentContext incidentContext = new IncidentContext(
+            "id",
+            "payments",
+            "payments-api",
+            List.of(),
+            List.of(),
+            "unknown",
+            "unknown",
+            0,
+            Map.of(
+                KubernetesTelemetryCollector.TELEMETRY_STATUS_KEY,
+                KubernetesTelemetryCollector.TELEMETRY_UNAVAILABLE,
+                KubernetesTelemetryCollector.TELEMETRY_REASONS_KEY,
+                List.of("LOKI_UNAVAILABLE: timeout")
+            )
+        );
+
+        when(kubernetesClient.apps().deployments()).thenReturn(deployments);
+        when(deployments.inNamespace("payments")).thenReturn(namespacedDeployments);
+        when(namespacedDeployments.withName("payments-api")).thenReturn(deploymentResource);
+        when(deploymentResource.get()).thenReturn(deployment);
+        when(telemetryCollector.collect(deployment)).thenReturn(incidentContext);
+
+        reconciler.reconcile(policy, mock(Context.class));
+
+        assertThat(policy.getStatus().getPhase()).isEqualTo("ANALYSIS_BLOCKED");
+        assertThat(policy.getStatus().getMessage()).contains("Telemetry unavailable");
+        verify(analyzerClient, never()).analyze(any());
+        verify(actionExecutor, never()).execute(any(), any());
     }
 
     private HealerPolicy policy() {
@@ -210,7 +271,7 @@ class HealerPolicyReconcilerTest {
 
     private Deployment deployment() {
         Deployment deployment = new Deployment();
-        deployment.setMetadata(new ObjectMetaBuilder().withName("payments-api").withNamespace("payments").build());
+        deployment.setMetadata(new ObjectMetaBuilder().withName("payments-api").withNamespace("payments").withGeneration(1L).build());
         deployment.setSpec(new DeploymentSpecBuilder().withReplicas(4).build());
         return deployment;
     }
