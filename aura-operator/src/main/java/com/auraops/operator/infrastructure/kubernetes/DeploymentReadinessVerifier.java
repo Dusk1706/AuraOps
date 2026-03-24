@@ -7,8 +7,6 @@ import io.fabric8.kubernetes.api.model.apps.Deployment;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import org.springframework.stereotype.Component;
 
-import java.time.Duration;
-import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -18,58 +16,37 @@ import java.util.Objects;
 public class DeploymentReadinessVerifier {
 
     private final KubernetesClient kubernetesClient;
-    private final HealerProperties healerProperties;
 
-    public DeploymentReadinessVerifier(KubernetesClient kubernetesClient, HealerProperties healerProperties) {
+    public DeploymentReadinessVerifier(KubernetesClient kubernetesClient) {
         this.kubernetesClient = Objects.requireNonNull(kubernetesClient);
-        this.healerProperties = Objects.requireNonNull(healerProperties);
     }
 
-    public VerificationResult verify(String namespace, String deploymentName) {
-        return verify(namespace, deploymentName, null);
-    }
-
-    public VerificationResult verify(String namespace, String deploymentName, Long minimumObservedGeneration) {
-        Duration timeout = healerProperties.getVerificationTimeout();
-        Duration pollInterval = healerProperties.getVerificationPollInterval();
-        Instant deadline = Instant.now().plus(timeout);
-
-        Deployment lastSeen = null;
-        while (!Instant.now().isAfter(deadline)) {
-            lastSeen = kubernetesClient.apps().deployments()
-                .inNamespace(namespace)
-                .withName(deploymentName)
-                .get();
-            if (lastSeen == null) {
-                return VerificationResult.failed("Deployment disappeared during verification");
-            }
-
-            long expectedGeneration = expectedObservedGeneration(lastSeen, minimumObservedGeneration);
-            if (isReady(lastSeen)
-                && observedGenerationSatisfied(lastSeen, expectedGeneration)
-                && activeReplicaSetReady(lastSeen, expectedGeneration)) {
-                return VerificationResult.ready(lastSeen, expectedGeneration);
-            }
-            sleep(pollInterval);
+    /**
+     * Performs an atomic (non-blocking) verification of deployment readiness.
+     * Checks if observedGeneration matches or exceeds expectedGeneration and if pods are ready.
+     */
+    public VerificationResult verify(Deployment deployment, Long expectedGeneration) {
+        if (deployment == null) {
+            return VerificationResult.failed("Deployment not found");
         }
 
-        return VerificationResult.failed(
-            lastSeen == null
-                ? "Deployment was never observed during verification"
-                : "Deployment did not become ready within " + timeout
-                + " (observedGeneration=" + observedGeneration(lastSeen)
-                + ", expectedGeneration=" + expectedObservedGeneration(lastSeen, minimumObservedGeneration) + ")"
-        );
-    }
-
-    private long expectedObservedGeneration(Deployment deployment, Long minimumObservedGeneration) {
-        long deploymentGeneration = deployment.getMetadata() == null || deployment.getMetadata().getGeneration() == null
-            ? 1L
-            : deployment.getMetadata().getGeneration();
-        if (minimumObservedGeneration == null) {
-            return deploymentGeneration;
+        long targetGeneration = expectedGeneration != null ? expectedGeneration : observedGeneration(deployment);
+        
+        if (!observedGenerationSatisfied(deployment, targetGeneration)) {
+            return VerificationResult.failed("Waiting for Kubernetes to observe the new generation (observed=" 
+                + observedGeneration(deployment) + ", expected=" + targetGeneration + ")");
         }
-        return Math.max(minimumObservedGeneration, deploymentGeneration);
+
+        if (!isReady(deployment)) {
+            return VerificationResult.failed("Deployment replicas are not yet ready (desired=" 
+                + defaultReplicas(deployment.getSpec().getReplicas()) + ")");
+        }
+
+        if (!activeReplicaSetReady(deployment, targetGeneration)) {
+            return VerificationResult.failed("Active ReplicaSet for generation " + targetGeneration + " is not yet ready");
+        }
+
+        return VerificationResult.ready(deployment, targetGeneration);
     }
 
     private boolean isReady(Deployment deployment) {
@@ -80,8 +57,8 @@ public class DeploymentReadinessVerifier {
         int desiredReplicas = defaultReplicas(deployment.getSpec().getReplicas());
         int readyReplicas = defaultReplicas(deployment.getStatus().getReadyReplicas());
         int availableReplicas = defaultReplicas(deployment.getStatus().getAvailableReplicas());
-        return readyReplicas >= desiredReplicas
-            && availableReplicas >= desiredReplicas;
+        
+        return readyReplicas >= desiredReplicas && availableReplicas >= desiredReplicas;
     }
 
     private boolean observedGenerationSatisfied(Deployment deployment, long expectedGeneration) {
@@ -126,15 +103,16 @@ public class DeploymentReadinessVerifier {
         return replicaSets.stream()
             .filter(this::hasStatus)
             .filter(replicaSet -> isOwnedByDeployment(replicaSet, deploymentUid))
-            .filter(replicaSet -> replicaSet.getStatus().getObservedGeneration() != null
-                && replicaSet.getMetadata() != null
-                && replicaSet.getMetadata().getGeneration() != null
-                && replicaSet.getStatus().getObservedGeneration() >= replicaSet.getMetadata().getGeneration())
+            // Only consider the RS that matches the deployment's current state (via revision)
             .max(Comparator.comparingLong(this::replicaSetRevision))
             .map(replicaSet -> {
-                long readyReplicas = defaultReplicas(replicaSet.getStatus().getReadyReplicas());
-                long deploymentObserved = observedGeneration(deployment);
-                return deploymentObserved >= expectedGeneration && readyReplicas >= desiredReplicas;
+                boolean rsObserved = replicaSet.getStatus().getObservedGeneration() != null
+                    && replicaSet.getMetadata().getGeneration() != null
+                    && replicaSet.getStatus().getObservedGeneration() >= replicaSet.getMetadata().getGeneration();
+                
+                int rsReadyReplicas = defaultReplicas(replicaSet.getStatus().getReadyReplicas());
+                
+                return rsObserved && rsReadyReplicas >= desiredReplicas;
             })
             .orElse(false);
     }
@@ -176,29 +154,19 @@ public class DeploymentReadinessVerifier {
         return replicas == null ? 1 : replicas;
     }
 
-    private void sleep(Duration pollInterval) {
-        try {
-            Thread.sleep(Math.max(1L, pollInterval.toMillis()));
-        } catch (InterruptedException ex) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("Deployment verification was interrupted", ex);
-        }
-    }
-
     public record VerificationResult(boolean ready, String message) {
-
-        static VerificationResult ready(Deployment deployment, long expectedGeneration) {
+        public static VerificationResult ready(Deployment deployment, long expectedGeneration) {
             int replicas = deployment.getSpec() == null || deployment.getSpec().getReplicas() == null
                 ? 1
                 : deployment.getSpec().getReplicas();
             return new VerificationResult(
                 true,
-                "Deployment passed readiness verification with " + replicas
-                    + " ready replicas and observedGeneration >= " + expectedGeneration
+                "Deployment passed readiness verification for generation " + expectedGeneration 
+                    + " with " + replicas + " ready replicas"
             );
         }
 
-        static VerificationResult failed(String message) {
+        public static VerificationResult failed(String message) {
             return new VerificationResult(false, message);
         }
     }

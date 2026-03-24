@@ -10,6 +10,7 @@ public class HealerPolicyStatus {
     private String aiDiagnosis;
     private Double healthScore;
     private String observedDeployment;
+    private Long expectedGeneration;
     private OffsetDateTime timestamp;
 
     public String getPhase() {
@@ -58,6 +59,14 @@ public class HealerPolicyStatus {
 
     public void setObservedDeployment(String observedDeployment) {
         this.observedDeployment = observedDeployment;
+    }
+
+    public Long getExpectedGeneration() {
+        return expectedGeneration;
+    }
+
+    public void setExpectedGeneration(Long expectedGeneration) {
+        this.expectedGeneration = expectedGeneration;
     }
 
     public OffsetDateTime getTimestamp() {

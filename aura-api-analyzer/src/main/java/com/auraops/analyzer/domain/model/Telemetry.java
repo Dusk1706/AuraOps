@@ -8,8 +8,8 @@ public record Telemetry(
     List<String> traces
 ) {
     public Telemetry {
-        if (logs == null || logs.isEmpty()) {
-            throw new IllegalArgumentException("telemetry logs cannot be empty");
+        if (logs == null) {
+            throw new IllegalArgumentException("telemetry logs cannot be null");
         }
         if (metrics == null) {
             throw new IllegalArgumentException("telemetry metrics cannot be null");

@@ -34,10 +34,11 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.springframework.web.client.RestClient;
+import org.testcontainers.k3s.K3sContainer;
+import org.testcontainers.utility.DockerImageName;
+import org.testcontainers.DockerClientFactory;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.time.Duration;
@@ -51,50 +52,23 @@ import static org.mockito.Mockito.mock;
 
 class HealerPolicyK3sE2ETest {
 
-    private static final String CONTAINER_NAME = "auraops-k3s-e2e";
-    private static final int API_PORT = 16443;
     private static final int ANALYZER_PORT = 18080;
 
+    private static K3sContainer k3s;
     private static KubernetesClient kubernetesClient;
     private static HttpServer analyzerStubServer;
 
     @BeforeAll
     static void setUpCluster() throws Exception {
-        assumeTrue(commandSucceeds("docker", "version"), "Docker CLI is required for the K3s e2e test");
+        assumeTrue(DockerClientFactory.instance().isDockerAvailable(), "Docker environment is required for K3s Testcontainers");
+        
+        k3s = new K3sContainer(DockerImageName.parse("rancher/k3s:v1.31.6-k3s1"));
+        k3s.start();
+        
+        String kubeconfigYaml = k3s.getKubeConfigYaml();
+        Config config = Config.fromKubeconfig(kubeconfigYaml);
+        kubernetesClient = new KubernetesClientBuilder().withConfig(config).build();
         startAnalyzerStub();
-
-        forceRemoveContainer();
-        runCommand(
-            "docker", "run", "-d", "--rm",
-            "--privileged",
-            "-p", API_PORT + ":6443",
-            "--name", CONTAINER_NAME,
-            "rancher/k3s:v1.31.6-k3s1",
-            "server", "--disable=traefik"
-        );
-
-        Instant deadline = Instant.now().plus(Duration.ofMinutes(4));
-        Exception lastFailure = null;
-        while (Instant.now().isBefore(deadline)) {
-            try {
-                String kubeconfig = readCommand(
-                    "docker", "exec", CONTAINER_NAME, "cat", "/etc/rancher/k3s/k3s.yaml"
-                );
-                if (kubeconfig != null && !kubeconfig.isBlank()) {
-                    kubeconfig = kubeconfig.replace("https://127.0.0.1:6443", "https://127.0.0.1:" + API_PORT);
-                    Config config = Config.fromKubeconfig(kubeconfig);
-                    kubernetesClient = new KubernetesClientBuilder().withConfig(config).build();
-                    kubernetesClient.namespaces().list();
-                    return;
-                }
-            } catch (Exception ex) {
-                lastFailure = ex;
-                Thread.sleep(3_000L);
-            }
-        }
-
-        forceRemoveContainer();
-        throw new IllegalStateException("K3s cluster did not become reachable", lastFailure);
     }
 
     @AfterAll
@@ -103,7 +77,9 @@ class HealerPolicyK3sE2ETest {
             kubernetesClient.close();
         }
         stopAnalyzerStub();
-        forceRemoveContainer();
+        if (k3s != null && k3s.isRunning()) {
+            k3s.stop();
+        }
     }
 
     @Test
@@ -146,11 +122,14 @@ class HealerPolicyK3sE2ETest {
             new HealingSafetyService(healerProperties),
             new HealingRateLimiter(RateLimiterRegistry.ofDefaults()),
             new DeploymentActionExecutor(kubernetesClient),
-            new DeploymentReadinessVerifier(kubernetesClient, healerProperties)
+            new DeploymentReadinessVerifier(kubernetesClient)
         );
 
         HealerPolicy policy = scaleOutPolicy(namespace, deploymentName);
         var result = reconciler.reconcile(policy, mock(Context.class));
+        
+        // Emulate the second reconciliation loop which verifies readiness
+        result = reconciler.reconcile(policy, mock(Context.class));
 
         waitUntilDeploymentReady(namespace, deploymentName, 2, Duration.ofMinutes(4));
         Deployment updated = kubernetesClient.apps().deployments().inNamespace(namespace).withName(deploymentName).get();
@@ -257,51 +236,6 @@ class HealerPolicyK3sE2ETest {
         if (analyzerStubServer != null) {
             analyzerStubServer.stop(0);
             analyzerStubServer = null;
-        }
-    }
-
-    private static boolean commandSucceeds(String... command) {
-        try {
-            runCommand(command);
-            return true;
-        } catch (Exception ex) {
-            return false;
-        }
-    }
-
-    private static String readCommand(String... command) throws IOException, InterruptedException {
-        Process process = new ProcessBuilder(command)
-            .redirectErrorStream(true)
-            .start();
-        String output;
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-            output = reader.lines().reduce("", (left, right) -> left.isEmpty() ? right : left + System.lineSeparator() + right);
-        }
-        int exitCode = process.waitFor();
-        if (exitCode != 0) {
-            throw new IllegalStateException("Command failed: " + String.join(" ", command) + System.lineSeparator() + output);
-        }
-        return output;
-    }
-
-    private static void runCommand(String... command) throws IOException, InterruptedException {
-        Process process = new ProcessBuilder(command)
-            .redirectErrorStream(true)
-            .start();
-        String output;
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-            output = reader.lines().reduce("", (left, right) -> left.isEmpty() ? right : left + System.lineSeparator() + right);
-        }
-        int exitCode = process.waitFor();
-        if (exitCode != 0) {
-            throw new IllegalStateException("Command failed: " + String.join(" ", command) + System.lineSeparator() + output);
-        }
-    }
-
-    private static void forceRemoveContainer() {
-        try {
-            runCommand("docker", "rm", "-f", CONTAINER_NAME);
-        } catch (Exception ignored) {
         }
     }
 }

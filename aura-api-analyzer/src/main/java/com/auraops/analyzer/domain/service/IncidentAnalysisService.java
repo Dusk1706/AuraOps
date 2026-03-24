@@ -18,6 +18,10 @@ public class IncidentAnalysisService {
             missingDataPoints.add("logs");
         }
 
+        if (incident.telemetry().traces().isEmpty()) {
+            missingDataPoints.add("traces");
+        }
+
         if (incident.telemetry().metrics().memoryUsage() == null
                 && incident.telemetry().metrics().cpuUsage() == null
                 && incident.telemetry().metrics().restartCount() == 0
@@ -25,14 +29,14 @@ public class IncidentAnalysisService {
             missingDataPoints.add("metrics");
         }
 
-        if (missingDataPoints.isEmpty()) {
-            return Optional.empty();
+        if (missingDataPoints.size() >= 2) { // If multiple major telemetry sources are missing
+            return Optional.of(new AnalysisResult.Inconclusive(
+                    incident.incidentId(),
+                    "Incident telemetry is insufficient for deterministic analysis",
+                    missingDataPoints
+            ));
         }
 
-        return Optional.of(new AnalysisResult.Inconclusive(
-                incident.incidentId(),
-                "Incident telemetry is insufficient for deterministic analysis",
-                missingDataPoints
-        ));
+        return Optional.empty();
     }
 }

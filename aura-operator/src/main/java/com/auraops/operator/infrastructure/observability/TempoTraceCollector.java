@@ -57,6 +57,8 @@ public class TempoTraceCollector {
             return Result.available(parse(body, properties.getTempo().getLimit()));
         } catch (RestClientException ex) {
             return Result.unavailable("TEMPO_UNAVAILABLE", ex.getClass().getSimpleName() + ": " + ex.getMessage());
+        } catch (RuntimeException ex) {
+            return Result.unavailable("TEMPO_PARSE_ERROR", "Failed to parse Tempo response: " + ex.getMessage());
         }
     }
 
@@ -85,7 +87,7 @@ public class TempoTraceCollector {
             }
             return summaries;
         } catch (Exception ex) {
-            return List.of();
+            throw new RuntimeException(ex);
         }
     }
 

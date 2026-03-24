@@ -122,7 +122,7 @@ class HealerPolicyReconcilerIntegrationTest {
         );
 
         DeploymentReadinessVerifier readinessVerifier = mock(DeploymentReadinessVerifier.class);
-        when(readinessVerifier.verify(any(), any(), any()))
+        when(readinessVerifier.verify(any(Deployment.class), any()))
             .thenReturn(new DeploymentReadinessVerifier.VerificationResult(true, "Deployment passed readiness verification with 4 ready replicas and observedGeneration >= 1"));
 
         HealerPolicyReconciler reconciler = new HealerPolicyReconciler(
@@ -143,10 +143,16 @@ class HealerPolicyReconcilerIntegrationTest {
 
         assertThat(result.isPatchStatus()).isTrue();
         assertThat(policy.getStatus()).isNotNull();
-        assertThat(policy.getStatus().getPhase()).isEqualTo("HEALED");
+        assertThat(policy.getStatus().getPhase()).isEqualTo("VERIFYING");
         assertThat(policy.getStatus().getLastAction()).isEqualTo("ROLLING_RESTART");
         assertThat(updated.getSpec().getTemplate().getMetadata().getAnnotations())
             .containsKeys("auraops.io/restartedAt", "auraops.io/heapDumpRequested");
+
+        // Second pass: mock verification complete
+        var secondResult = reconciler.reconcile(policy, mock(Context.class));
+        
+        assertThat(secondResult.isPatchStatus()).isTrue();
+        assertThat(policy.getStatus().getPhase()).isEqualTo("HEALED");
     }
 
     private HealerPolicy healerPolicy() {

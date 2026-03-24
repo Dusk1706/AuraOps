@@ -6,6 +6,7 @@ public enum HealingPhase {
     ANALYSIS_BLOCKED,
     POLICY_BLOCKED,
     RATE_LIMITED,
+    VERIFYING,
     HEALED,
     FAILED
 }

@@ -63,6 +63,8 @@ public class LokiLogCollector {
             return Result.available(parse(body, maxLines));
         } catch (RestClientException ex) {
             return Result.unavailable("LOKI_UNAVAILABLE", ex.getClass().getSimpleName() + ": " + ex.getMessage());
+        } catch (RuntimeException ex) {
+            return Result.unavailable("LOKI_PARSE_ERROR", "Failed to parse Loki response: " + ex.getMessage());
         }
     }
 
@@ -86,7 +88,7 @@ public class LokiLogCollector {
             }
             return logs;
         } catch (Exception ex) {
-            return List.of();
+            throw new RuntimeException(ex);
         }
     }
 

@@ -31,8 +31,13 @@ class DomainModelTest {
     }
 
     @Test
-    void telemetry_shouldRejectEmptyLogs() {
-        assertThrows(IllegalArgumentException.class, () -> new Telemetry(List.of(), new Metrics("1Gi", "500m", 1), null));
+    void telemetry_shouldRejectNullLogs() {
+        assertThrows(IllegalArgumentException.class, () -> new Telemetry(null, new Metrics("1Gi", "500m", 1), null));
+    }
+
+    @Test
+    void telemetry_shouldAllowEmptyLogs() {
+        assertDoesNotThrow(() -> new Telemetry(List.of(), new Metrics("1Gi", "500m", 1), null));
     }
 
     @Test

@@ -25,6 +25,9 @@ dependencies {
     implementation("io.github.resilience4j:resilience4j-spring-boot3:2.3.0")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("io.fabric8:kubernetes-server-mock:7.3.1")
+    testImplementation("org.testcontainers:testcontainers:1.20.1")
+    testImplementation("org.testcontainers:k3s:1.20.1")
+    testImplementation("org.testcontainers:junit-jupiter:1.20.1")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
