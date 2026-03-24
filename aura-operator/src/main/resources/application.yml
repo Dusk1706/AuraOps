@@ -1,0 +1,69 @@
+spring:
+  application:
+    name: aura-operator
+  main:
+    banner-mode: off
+  threads:
+    virtual:
+      enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+
+logging:
+  level:
+    com.auraops: DEBUG
+    io.javaoperatorsdk: INFO
+
+auraops:
+  analyzer:
+    base-url: ${AURAOPS_ANALYZER_BASE_URL:http://localhost:8080}
+    analyze-path: /api/v1/analyze
+    connect-timeout: 2s
+    read-timeout: 10s
+  healer:
+    max-impact-ratio: 0.25
+    log-lines-per-pod: 100
+    max-total-log-lines: 500
+    verification-timeout: 30s
+    verification-poll-interval: 2s
+  observability:
+    loki:
+      enabled: ${AURAOPS_OBSERVABILITY_LOKI_ENABLED:false}
+      base-url: ${AURAOPS_OBSERVABILITY_LOKI_BASE_URL:http://localhost:3100}
+      query-range-path: /loki/api/v1/query_range
+      label-name: app
+      lookback: 5m
+      connect-timeout: 2s
+      read-timeout: 5s
+    tempo:
+      enabled: ${AURAOPS_OBSERVABILITY_TEMPO_ENABLED:false}
+      base-url: ${AURAOPS_OBSERVABILITY_TEMPO_BASE_URL:http://localhost:3200}
+      search-path: /api/search
+      lookback: 5m
+      limit: 5
+      connect-timeout: 2s
+      read-timeout: 5s
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      analyzerClient:
+        sliding-window-size: 20
+        failure-rate-threshold: 50
+        minimum-number-of-calls: 5
+        wait-duration-in-open-state: 30s
+  ratelimiter:
+    instances:
+      healingActions:
+        limit-for-period: 10
+        limit-refresh-period: 1m
+        timeout-duration: 0

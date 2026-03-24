@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aura-operator
+  namespace: auraops-system
+  labels:
+    app.kubernetes.io/name: aura-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: aura-operator
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: aura-operator
+    spec:
+      serviceAccountName: aura-operator
+      containers:
+        - name: operator
+          image: auraops/aura-operator:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: AURAOPS_ANALYZER_BASE_URL
+              value: http://aura-api-analyzer.default.svc.cluster.local:8080
+            - name: AURAOPS_OBSERVABILITY_LOKI_ENABLED
+              value: "false"
+            - name: AURAOPS_OBSERVABILITY_LOKI_BASE_URL
+              value: http://loki.monitoring.svc.cluster.local:3100
+            - name: AURAOPS_OBSERVABILITY_TEMPO_ENABLED
+              value: "false"
+            - name: AURAOPS_OBSERVABILITY_TEMPO_BASE_URL
+              value: http://tempo.monitoring.svc.cluster.local:3200
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi

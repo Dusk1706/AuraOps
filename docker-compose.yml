@@ -6,9 +6,65 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - SPRING_AI_OPENAI_API_KEY=${OPENAI_API_KEY:-your_key_here}
+      SPRING_PROFILES_ACTIVE: ${AURAOPS_ANALYZER_PROFILE:-e2e}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+    depends_on:
+      - loki
+      - tempo
     networks:
       - aura-network
+
+  aura-operator:
+    build:
+      context: ./aura-operator
+      dockerfile: Dockerfile
+    ports:
+      - "8081:8080"
+    environment:
+      AURAOPS_ANALYZER_BASE_URL: http://aura-api-analyzer:8080
+      AURAOPS_OBSERVABILITY_LOKI_ENABLED: "true"
+      AURAOPS_OBSERVABILITY_LOKI_BASE_URL: http://loki:3100
+      AURAOPS_OBSERVABILITY_TEMPO_ENABLED: "true"
+      AURAOPS_OBSERVABILITY_TEMPO_BASE_URL: http://tempo:3200
+      KUBECONFIG: /home/spring/.kube/config
+    volumes:
+      - ${USERPROFILE}/.kube/config:/home/spring/.kube/config:ro
+    depends_on:
+      - aura-api-analyzer
+      - loki
+      - tempo
+    networks:
+      - aura-network
+
+  loki:
+    image: grafana/loki:3.4.2
+    command: ["--config.file=/etc/loki/local-config.yaml"]
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./infra/observability/loki/loki-config.yaml:/etc/loki/local-config.yaml:ro
+      - loki-data:/loki
+    networks:
+      - aura-network
+
+  tempo:
+    image: grafana/tempo:2.7.2
+    command: ["--config.file=/etc/tempo/tempo-config.yaml"]
+    ports:
+      - "3200:3200"
+      - "4317:4317"
+      - "4318:4318"
+    volumes:
+      - ./infra/observability/tempo/tempo-config.yaml:/etc/tempo/tempo-config.yaml:ro
+      - tempo-data:/tmp/tempo
+    networks:
+      - aura-network
+
+volumes:
+  loki-data:
+  tempo-data:
 
 networks:
   aura-network:

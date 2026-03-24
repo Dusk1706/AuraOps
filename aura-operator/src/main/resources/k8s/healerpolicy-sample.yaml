@@ -1,0 +1,14 @@
+apiVersion: auraops.io/v1
+kind: HealerPolicy
+metadata:
+  name: payments-api-auto-heal
+spec:
+  targetDeployment: payments-api
+  aiConfidenceThreshold: 0.95
+  strategies:
+    - type: MemoryLeak
+      action: ROLLING_RESTART
+      threshold: "85%"
+    - type: LatencySpike
+      action: SCALE_OUT
+      maxReplicas: 10
