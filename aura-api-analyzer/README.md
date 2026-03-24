@@ -1,14 +1,28 @@
 # Aura API Analyzer
 
-The Analyzer is the AI-driven "brain" of the AuraOps ecosystem. It is a stateless Spring Boot application built with Spring AI.
+The Analyzer acts as the AI reasoning engine of the AuraOps platform. It is a highly concurrent Spring Boot service that processes complex telemetry data to diagnose system failures.
 
-## Core Responsibilities
+## Architectural Role in AuraOps
 
-1.  **Context Processing:** Receives structured incident context (logs, metrics, and traces) from the Aura Operator.
-2.  **LLM Integration:** Interfaces with an LLM (OpenAI, Anthropic, or Ollama) to analyze the provided telemetry.
-3.  **Deterministic Decision Making:** Returns a strictly formatted JSON response detailing the diagnosis, confidence score, and recommended remediation action (e.g., `ROLLING_RESTART`, `SCALE_OUT`).
-4.  **Graceful Degradation:** Emits an `INCONCLUSIVE` result if the required telemetry is missing or if the AI confidence is below the established threshold, preventing destructive guesswork.
+In the overarching AuraOps ecosystem (as outlined in the root README), the Analyzer is **Phase 1: The Brain**. It sits behind the Istio Service Mesh and receives HTTP requests exclusively from the Aura Operator.
 
-## Security
+### Key Capabilities
+*   **High-Throughput Processing:** Built on **Java 21 Virtual Threads**, allowing a single instance to handle thousands of concurrent analysis requests without blocking OS threads.
+*   **Agnostic AI Integration:** Utilizes **Spring AI** to seamlessly switch between local inference (Ollama) for privacy/cost-efficiency, or cloud providers (OpenAI, Anthropic) for complex reasoning.
+*   **Deterministic Fallbacks:** The domain logic forces an `INCONCLUSIVE` result if the telemetry (logs, metrics, or traces) is insufficient, ensuring the AI never guesses blindly.
 
-This service does not read API keys from environment variables or Kubernetes Secrets. It relies on the HashiCorp Vault Agent Injector to mount a transient `application.properties` file containing the necessary credentials at runtime.
+## Zero Trust Security
+
+As part of Phase 3, this service does not contain static secrets. 
+*   **No Environment Variables:** `OPENAI_API_KEY` is not present in the Deployment YAML.
+*   **Vault Injection:** Upon pod startup, the HashiCorp Vault Agent Injector authenticates via the pod's `ServiceAccount` and renders the credentials into `/vault/secrets/application.properties`, which Spring Boot imports automatically via `SPRING_CONFIG_IMPORT`.
+
+## Development
+
+```bash
+# Run the test suite
+./gradlew test
+
+# Build the Docker image
+docker build -t auraops/aura-api-analyzer:latest .
+```

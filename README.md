@@ -1,40 +1,67 @@
-# AuraOps
+# AuraOps: AI-Driven Kubernetes Self-Healing Platform
 
-AuraOps is an advanced, AI-driven Kubernetes Operator designed for autonomous issue resolution and self-healing. It consists of two primary components communicating securely over an Istio Service Mesh, with dynamic secret management provided by HashiCorp Vault.
+![Architecture Concept](https://img.shields.io/badge/Architecture-Event%20Driven-blue) ![Kubernetes](https://img.shields.io/badge/Kubernetes-Native-blue) ![Zero Trust](https://img.shields.io/badge/Security-Zero%20Trust-green)
 
-## Architecture
+AuraOps is a senior-level, enterprise-grade Kubernetes ecosystem designed to autonomously monitor, diagnose, and heal microservices. By combining a native Kubernetes Operator with LLM-powered root cause analysis, AuraOps reduces Mean Time To Recovery (MTTR) from minutes to seconds without human intervention.
 
-*   **aura-api-analyzer (The Brain):** A Spring Boot service leveraging Spring AI. It receives telemetry context (logs, metrics, traces), consults an LLM, and outputs a deterministic root cause diagnosis and a suggested remediation action.
-*   **aura-operator (The Healer):** A Java-based Kubernetes Operator (built with Java Operator SDK) that monitors cluster resources. When an anomaly is detected, it collects telemetry via Loki and Tempo, requests a decision from the Analyzer, validates the decision against safety policies, and applies the healing action (e.g., rolling restart, scaling).
-*   **Zero Trust Network:** Both components run within an Istio Service Mesh enforcing strict mTLS.
-*   **Dynamic Secrets:** Credentials (like OpenAI/Anthropic API keys) are never stored as Kubernetes Secrets. They are injected directly into the pod's memory at runtime using HashiCorp Vault Agent Injector.
+## 🌟 The Vision & Architecture
 
-## Deployment
+AuraOps is designed across 7 strategic phases, culminating in a robust, GitOps-driven, and highly observable platform.
 
-The entire system is packaged as a unified, self-contained Kustomize deployment.
+### 1. The Brain: Aura API Analyzer (Spring AI)
+A stateless Spring Boot application built with **Spring AI** and **Java 21 Virtual Threads**. It receives telemetry (logs from Loki, metrics from Prometheus, traces from Tempo), passes it to an LLM (OpenAI, Anthropic, or Ollama), and outputs a deterministic root cause diagnosis and a concrete remediation action.
+
+### 2. The Healer: Aura Kubernetes Operator (Java Operator SDK)
+A custom controller that watches the cluster for anomalies based on `HealerPolicy` CRDs. When an issue occurs, it collects context, queries the Analyzer, evaluates the suggested action against **Resilience4j** rate limiters and safety policies, and asynchronously executes Kubernetes API commands to heal the deployment (e.g., rolling restarts, scaling).
+
+### 3. The Network: Zero Trust & Service Mesh (Istio & Vault)
+A strict **Istio Service Mesh** ensures all inter-service communication is encrypted via mTLS. **HashiCorp Vault** serves as the internal PKI for Istio and uses the Vault Agent Injector to dynamically inject sensitive credentials (like LLM API keys) directly into pod memory, eliminating static Kubernetes Secrets.
+
+### 4. The Dashboard: Real-time Command Center (Angular 19) *(Upcoming)*
+A high-fidelity frontend utilizing the **Angular Signals API** for ultra-fast, granular DOM updates. It connects to the backend via **WebSockets (STOMP)** to provide a real-time, live-updating map of cluster health and autonomous actions.
+
+### 5. Infrastructure as Code: GitOps & Terraform *(Upcoming)*
+The entire AWS infrastructure (EKS, RDS, MSK) will be codified in **Terraform** using reusable modules, remote S3 state, and DynamoDB locking. The application layer will be packaged using **Helm Charts** for consistent deployments across Dev/Staging/Prod.
+
+### 6. DevSecOps & Quality Assurance *(Upcoming)*
+A rigorous CI/CD pipeline built on GitHub Actions featuring:
+*   **Pact Contract Testing:** Ensuring backward compatibility between the Operator and the Analyzer.
+*   **SonarQube:** Code quality and test coverage enforcement.
+*   **Snyk & Trivy:** Continuous vulnerability scanning for Java dependencies, Node.js packages, and Docker images.
+
+### 7. Observability: LGTM Stack *(Upcoming)*
+A modern observability stack powered by OpenTelemetry:
+*   **Loki:** Log aggregation.
+*   **Tempo:** Distributed tracing.
+*   **Mimir/Prometheus:** High-cardinality metrics.
+*   **Grafana:** Unified dashboarding.
+
+---
+
+## 🚀 Getting Started (Current State: Phase 3 Completed)
+
+Currently, Phase 1 (Analyzer), Phase 2 (Operator), and Phase 3 (Zero Trust Network) are fully implemented.
+
+### Prerequisites
+*   Docker & Kubernetes Cluster (e.g., Docker Desktop, K3s, Minikube)
+*   `kubectl` & `kustomize`
+
+### Deployment
+
+The backend and infrastructure are packaged as a self-contained Kustomize setup.
 
 ```bash
 kubectl apply -k deploy
 ```
 
-This command deploys:
-1.  **Vault:** Development server with a setup job to configure PKI and inject initial dummy secrets.
-2.  **Istio:** Base and Istiod control plane, plus strict PeerAuthentication policies.
-3.  **Kiali:** For network observability and traffic visualization.
-4.  **AuraOps:** The Operator and the API Analyzer components.
+This will automatically spin up:
+1.  **HashiCorp Vault** (with setup jobs for PKI and secret injection)
+2.  **Istio Control Plane** (with strict mTLS policies)
+3.  **Kiali** (for mesh visualization)
+4.  **AuraOps Operator & Analyzer**
 
-## Development
-
-The project uses Gradle.
-
-To run the full test suite for the Analyzer:
-```bash
-cd aura-api-analyzer
-./gradlew test
-```
-
-To run the full test suite for the Operator (including Testcontainers-based E2E tests):
-```bash
-cd aura-operator
-./gradlew test
-```
+### Project Structure
+*   [`/aura-api-analyzer`](./aura-api-analyzer/README.md) - The AI reasoning engine.
+*   [`/aura-operator`](./aura-operator/README.md) - The Kubernetes native controller.
+*   `/deploy` - Kustomize manifests for local/production deployments.
+*   `/infra` - Sub-modules for security (Istio, Vault, Kiali) and observability.
