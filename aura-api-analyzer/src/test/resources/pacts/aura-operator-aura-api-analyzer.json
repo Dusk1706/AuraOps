@@ -1,0 +1,118 @@
+{
+  "consumer": {
+    "name": "aura-operator"
+  },
+  "provider": {
+    "name": "aura-api-analyzer"
+  },
+  "interactions": [
+    {
+      "description": "analyze incident successfully",
+      "providerStates": [
+        {
+          "name": "analysis available"
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/analyze",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "incident_id": "pact-success-001",
+          "resource": {
+            "kind": "Pod",
+            "name": "payments-api",
+            "namespace": "payments"
+          },
+          "telemetry": {
+            "logs": [
+              "java.lang.OutOfMemoryError: Java heap space"
+            ],
+            "metrics": {
+              "memory_usage": "970Mi",
+              "cpu_usage": "0.92",
+              "restart_count": 4
+            },
+            "traces": [
+              "trace-001"
+            ]
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "diagnosis": "OOMKilled after sustained heap pressure",
+          "confidence": 0.97,
+          "recommended_action": {
+            "type": "ROLLING_RESTART",
+            "parameters": {
+              "resource": "Pod/payments-api",
+              "namespace": "payments"
+            }
+          },
+          "explanation": "Logs and restart count indicate heap exhaustion with a repeatable recovery action."
+        }
+      }
+    },
+    {
+      "description": "analyze incident inconclusive",
+      "providerStates": [
+        {
+          "name": "analysis inconclusive"
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/analyze",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "incident_id": "pact-inconclusive-001",
+          "resource": {
+            "kind": "Pod",
+            "name": "payments-api",
+            "namespace": "payments"
+          },
+          "telemetry": {
+            "logs": [
+              "Insufficient evidence"
+            ],
+            "metrics": {
+              "memory_usage": "450Mi",
+              "cpu_usage": "0.20",
+              "restart_count": 0
+            }
+          }
+        }
+      },
+      "response": {
+        "status": 422,
+        "headers": {
+          "Content-Type": "application/problem+json"
+        },
+        "body": {
+          "type": "https://auraops.dev/problems/ai_low_confidence",
+          "title": "Analysis Inconclusive",
+          "status": 422,
+          "detail": "Low data. Missing: traces",
+          "instance": "/api/v1/analyze",
+          "error_code": "AI_LOW_CONFIDENCE",
+          "message": "Low data. Missing: traces",
+          "requires_human": true
+        }
+      }
+    }
+  ],
+  "metadata": {
+    "pactSpecification": {
+      "version": "3.0.0"
+    }
+  }
+}
