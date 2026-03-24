@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.auraops.analyzer.infrastructure.integration.AnalyzeIncidentWithContainerIntegrationTest" tests="1" skipped="1" failures="0" errors="0" timestamp="2026-03-24T23:04:04.985Z" hostname="WORKER" time="0.0">
+  <properties/>
+  <testcase name="analyze_withContainerBackedTelemetry_returnsDeterministicAction()" classname="com.auraops.analyzer.infrastructure.integration.AnalyzeIncidentWithContainerIntegrationTest" time="0.0">
+    <skipped/>
+  </testcase>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

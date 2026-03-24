@@ -1,0 +1,213 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AnalysisResponseParser.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">aura-api-analyzer</a> &gt; <a href="index.source.html" class="el_package">com.auraops.analyzer.infrastructure.adapters.out.ai</a> &gt; <span class="el_source">AnalysisResponseParser.java</span></div><h1>AnalysisResponseParser.java</h1><pre class="source lang-java linenums">package com.auraops.analyzer.infrastructure.adapters.out.ai;
+
+import com.auraops.analyzer.domain.model.AnalysisResult;
+import com.auraops.analyzer.domain.model.ErrorCode;
+import com.auraops.analyzer.domain.model.RemediationAction;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.stereotype.Component;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+@Component
+public class AnalysisResponseParser {
+
+    private final ObjectMapper objectMapper;
+
+<span class="fc" id="L21">    public AnalysisResponseParser(ObjectMapper objectMapper) {</span>
+<span class="fc" id="L22">        this.objectMapper = objectMapper;</span>
+<span class="fc" id="L23">    }</span>
+
+    public AnalysisResult parse(String incidentId, String content) {
+        try {
+<span class="fc" id="L27">            JsonNode root = objectMapper.readTree(content);</span>
+<span class="fc" id="L28">            String status = Optional.ofNullable(field(root, &quot;status&quot;)).map(JsonNode::asText).orElse(&quot;INCONCLUSIVE&quot;);</span>
+
+<span class="pc bpc" id="L30" title="1 of 2 branches missed.">            if (&quot;SUCCESS&quot;.equalsIgnoreCase(status)) {</span>
+<span class="fc" id="L31">                return parseSuccess(incidentId, root);</span>
+            }
+
+<span class="nc" id="L34">            return parseInconclusive(incidentId, root);</span>
+<span class="fc" id="L35">        } catch (Exception e) {</span>
+<span class="fc" id="L36">            return new AnalysisResult.CriticalFailure(</span>
+                incidentId,
+                ErrorCode.PARSING_ERROR,
+<span class="fc" id="L39">                &quot;Failed to parse LLM response: &quot; + e.getMessage()</span>
+            );
+        }
+    }
+
+    public AnalysisResult parse(String incidentId, StructuredAnalysisResponse response) {
+        try {
+<span class="nc" id="L46">            String status = Optional.ofNullable(response.status()).orElse(&quot;INCONCLUSIVE&quot;);</span>
+<span class="nc bnc" id="L47" title="All 2 branches missed.">            if (&quot;SUCCESS&quot;.equalsIgnoreCase(status)) {</span>
+<span class="nc" id="L48">                return parseStructuredSuccess(incidentId, response);</span>
+            }
+
+<span class="nc" id="L51">            return new AnalysisResult.Inconclusive(</span>
+                incidentId,
+<span class="nc bnc" id="L53" title="All 2 branches missed.">                Optional.ofNullable(response.reason()).filter(reason -&gt; !reason.isBlank()).orElse(&quot;Unknown reason&quot;),</span>
+<span class="nc bnc" id="L54" title="All 2 branches missed.">                response.missingDataPoints() == null ? List.of() : response.missingDataPoints()</span>
+            );
+<span class="nc" id="L56">        } catch (Exception e) {</span>
+<span class="nc" id="L57">            return new AnalysisResult.CriticalFailure(</span>
+                incidentId,
+                ErrorCode.PARSING_ERROR,
+<span class="nc" id="L60">                &quot;Failed to map structured LLM response: &quot; + e.getMessage()</span>
+            );
+        }
+    }
+
+    private AnalysisResult parseSuccess(String incidentId, JsonNode root) {
+<span class="fc" id="L66">        String diagnosis = textValue(root, &quot;diagnosis&quot;);</span>
+<span class="fc" id="L67">        Double confidence = doubleValue(root, &quot;confidence&quot;);</span>
+<span class="fc" id="L68">        String technicalReasoning = firstNonBlankText(root, &quot;technicalReasoning&quot;, &quot;technical_reasoning&quot;, &quot;explanation&quot;);</span>
+<span class="fc" id="L69">        JsonNode actionNode = firstPresentField(root, &quot;recommendedAction&quot;, &quot;recommended_action&quot;);</span>
+
+<span class="fc" id="L71">        List&lt;String&gt; missing = new ArrayList&lt;&gt;();</span>
+<span class="pc bpc" id="L72" title="1 of 2 branches missed.">        if (diagnosis.isBlank()) {</span>
+<span class="nc" id="L73">            missing.add(&quot;diagnosis&quot;);</span>
+        }
+<span class="pc bpc" id="L75" title="3 of 6 branches missed.">        if (confidence == null || confidence &lt;= 0.0 || confidence &gt; 1.0) {</span>
+<span class="nc" id="L76">            missing.add(&quot;confidence&quot;);</span>
+        }
+<span class="fc bfc" id="L78" title="All 2 branches covered.">        if (technicalReasoning.isBlank()) {</span>
+<span class="fc" id="L79">            missing.add(&quot;technicalReasoning&quot;);</span>
+        }
+<span class="pc bpc" id="L81" title="1 of 4 branches missed.">        if (actionNode == null || actionNode.isNull()) {</span>
+<span class="fc" id="L82">            missing.add(&quot;recommendedAction&quot;);</span>
+        }
+
+<span class="fc bfc" id="L85" title="All 2 branches covered.">        if (!missing.isEmpty()) {</span>
+<span class="fc" id="L86">            return new AnalysisResult.Inconclusive(</span>
+                incidentId,
+                &quot;LLM response missing mandatory fields for SUCCESS&quot;,
+                missing
+            );
+        }
+
+<span class="fc" id="L93">        String actionType = Optional.ofNullable(field(actionNode, &quot;type&quot;)).map(JsonNode::asText).orElse(&quot;&quot;);</span>
+<span class="pc bpc" id="L94" title="1 of 2 branches missed.">        if (actionType.isBlank()) {</span>
+<span class="nc" id="L95">            return new AnalysisResult.Inconclusive(</span>
+                incidentId,
+                &quot;LLM response missing mandatory fields for SUCCESS&quot;,
+<span class="nc" id="L98">                List.of(&quot;recommendedAction.type&quot;)</span>
+            );
+        }
+
+<span class="fc" id="L102">        Map&lt;String, Object&gt; parameters = Optional.ofNullable(actionNode.get(&quot;parameters&quot;))</span>
+<span class="pc bpc" id="L103" title="1 of 2 branches missed.">            .filter(node -&gt; !node.isNull())</span>
+<span class="fc" id="L104">            .map(node -&gt; objectMapper.convertValue(node, new TypeReference&lt;Map&lt;String, Object&gt;&gt;() {}))</span>
+<span class="fc" id="L105">            .orElse(Map.of());</span>
+
+<span class="fc" id="L107">        return new AnalysisResult.Success(</span>
+            incidentId,
+            diagnosis,
+<span class="fc" id="L110">            confidence,</span>
+            new RemediationAction(actionType, parameters),
+            technicalReasoning
+        );
+    }
+
+    private AnalysisResult parseStructuredSuccess(String incidentId, StructuredAnalysisResponse response) {
+<span class="nc" id="L117">        String diagnosis = Optional.ofNullable(response.diagnosis()).orElse(&quot;&quot;);</span>
+<span class="nc" id="L118">        Double confidence = response.confidence();</span>
+<span class="nc" id="L119">        String technicalReasoning = Optional.ofNullable(response.technicalReasoning()).orElse(&quot;&quot;);</span>
+<span class="nc" id="L120">        StructuredAnalysisResponse.StructuredRemediationAction action = response.recommendedAction();</span>
+
+<span class="nc" id="L122">        List&lt;String&gt; missing = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L123" title="All 2 branches missed.">        if (diagnosis.isBlank()) {</span>
+<span class="nc" id="L124">            missing.add(&quot;diagnosis&quot;);</span>
+        }
+<span class="nc bnc" id="L126" title="All 6 branches missed.">        if (confidence == null || confidence &lt;= 0.0 || confidence &gt; 1.0) {</span>
+<span class="nc" id="L127">            missing.add(&quot;confidence&quot;);</span>
+        }
+<span class="nc bnc" id="L129" title="All 2 branches missed.">        if (technicalReasoning.isBlank()) {</span>
+<span class="nc" id="L130">            missing.add(&quot;technicalReasoning&quot;);</span>
+        }
+<span class="nc bnc" id="L132" title="All 2 branches missed.">        if (action == null) {</span>
+<span class="nc" id="L133">            missing.add(&quot;recommendedAction&quot;);</span>
+        }
+
+<span class="nc bnc" id="L136" title="All 2 branches missed.">        if (!missing.isEmpty()) {</span>
+<span class="nc" id="L137">            return new AnalysisResult.Inconclusive(</span>
+                incidentId,
+                &quot;LLM response missing mandatory fields for SUCCESS&quot;,
+                missing
+            );
+        }
+
+<span class="nc" id="L144">        String actionType = Optional.ofNullable(action.type()).orElse(&quot;&quot;);</span>
+<span class="nc bnc" id="L145" title="All 2 branches missed.">        if (actionType.isBlank()) {</span>
+<span class="nc" id="L146">            return new AnalysisResult.Inconclusive(</span>
+                incidentId,
+                &quot;LLM response missing mandatory fields for SUCCESS&quot;,
+<span class="nc" id="L149">                List.of(&quot;recommendedAction.type&quot;)</span>
+            );
+        }
+
+<span class="nc" id="L153">        return new AnalysisResult.Success(</span>
+            incidentId,
+            diagnosis,
+<span class="nc" id="L156">            confidence,</span>
+<span class="nc bnc" id="L157" title="All 2 branches missed.">            new RemediationAction(actionType, action.parameters() == null ? Map.of() : action.parameters()),</span>
+            technicalReasoning
+        );
+    }
+
+    private AnalysisResult parseInconclusive(String incidentId, JsonNode root) {
+<span class="nc" id="L163">        String reason = Optional.ofNullable(field(root, &quot;reason&quot;)).map(JsonNode::asText).orElse(&quot;Unknown reason&quot;);</span>
+<span class="nc" id="L164">        JsonNode missingNode = firstPresentField(root, &quot;missingDataPoints&quot;, &quot;missing_data_points&quot;);</span>
+<span class="nc bnc" id="L165" title="All 4 branches missed.">        List&lt;String&gt; missingDataPoints = missingNode == null || missingNode.isNull()</span>
+<span class="nc" id="L166">            ? List.of()</span>
+<span class="nc" id="L167">            : objectMapper.convertValue(missingNode, new TypeReference&lt;List&lt;String&gt;&gt;() {});</span>
+
+<span class="nc" id="L169">        return new AnalysisResult.Inconclusive(</span>
+            incidentId,
+            reason,
+<span class="nc bnc" id="L172" title="All 2 branches missed.">            missingDataPoints == null ? List.of() : missingDataPoints</span>
+        );
+    }
+
+    private JsonNode firstPresentField(JsonNode node, String... names) {
+<span class="fc bfc" id="L177" title="All 2 branches covered.">        for (String name : names) {</span>
+<span class="fc" id="L178">            JsonNode candidate = field(node, name);</span>
+<span class="fc bfc" id="L179" title="All 2 branches covered.">            if (candidate != null) {</span>
+<span class="fc" id="L180">                return candidate;</span>
+            }
+        }
+<span class="fc" id="L183">        return null;</span>
+    }
+
+    private JsonNode field(JsonNode node, String name) {
+<span class="fc" id="L187">        JsonNode candidate = node.get(name);</span>
+<span class="pc bpc" id="L188" title="1 of 4 branches missed.">        return candidate == null || candidate.isMissingNode() ? null : candidate;</span>
+    }
+
+    private String textValue(JsonNode node, String name) {
+<span class="fc" id="L192">        return Optional.ofNullable(field(node, name)).map(JsonNode::asText).orElse(&quot;&quot;);</span>
+    }
+
+    private Double doubleValue(JsonNode node, String name) {
+<span class="fc" id="L196">        JsonNode value = field(node, name);</span>
+<span class="pc bpc" id="L197" title="2 of 4 branches missed.">        if (value == null || !value.isNumber()) {</span>
+<span class="nc" id="L198">            return null;</span>
+        }
+<span class="fc" id="L200">        return value.asDouble();</span>
+    }
+
+    private String firstNonBlankText(JsonNode node, String... names) {
+<span class="fc bfc" id="L204" title="All 2 branches covered.">        for (String name : names) {</span>
+<span class="fc" id="L205">            String value = textValue(node, name);</span>
+<span class="fc bfc" id="L206" title="All 2 branches covered.">            if (!value.isBlank()) {</span>
+<span class="fc" id="L207">                return value;</span>
+            }
+        }
+<span class="fc" id="L210">        return &quot;&quot;;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.14.202510111229</span></div></body></html>

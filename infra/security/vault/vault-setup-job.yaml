@@ -1,0 +1,66 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vault-setup
+  namespace: vault
+spec:
+  template:
+    spec:
+      serviceAccountName: vault
+      restartPolicy: OnFailure
+      containers:
+      - name: vault-setup
+        image: hashicorp/vault:1.16.2
+        env:
+        - name: VAULT_ADDR
+          value: "http://vault.vault.svc.cluster.local:8200"
+        - name: VAULT_TOKEN
+          value: "root"
+        command:
+        - "/bin/sh"
+        - "-c"
+        - |
+          echo "Waiting for Vault to be ready..."
+          while ! vault status; do
+            sleep 2
+          done
+
+          echo "Enabling Kubernetes auth method..."
+          vault auth enable kubernetes || true
+
+          echo "Configuring Kubernetes auth method..."
+          vault write auth/kubernetes/config \
+            kubernetes_host="https://$KUBERNETES_SERVICE_HOST:$KUBERNETES_SERVICE_PORT"
+
+          echo "Creating AuraOps policy..."
+          vault policy write auraops-analyzer - <<EOF
+          path "secret/data/auraops/*" {
+            capabilities = ["read"]
+          }
+          EOF
+
+          echo "Creating Vault Role for aura-api-analyzer..."
+          vault write auth/kubernetes/role/aura-api-analyzer \
+            bound_service_account_names=aura-api-analyzer \
+            bound_service_account_namespaces=auraops-system \
+            policies=auraops-analyzer \
+            ttl=24h
+
+          echo "Injecting initial dummy secrets for testing..."
+          vault kv put secret/auraops/analyzer \
+            openai-api-key="sk-dummy-vault-injected-key" \
+            anthropic-api-key="sk-ant-dummy-key"
+          
+          echo "Setting up Vault PKI as Root CA for Istio..."
+          vault secrets enable pki || true
+          vault secrets tune -max-lease-ttl=87600h pki
+          
+          vault write -field=certificate pki/root/generate/internal \
+            common_name="AuraOps Root CA" \
+            ttl=87600h > root_2026_ca.crt
+
+          vault write pki/config/urls \
+            issuing_certificates="$VAULT_ADDR/v1/pki/ca" \
+            crl_distribution_points="$VAULT_ADDR/v1/pki/crl"
+
+          echo "Vault setup completed successfully."

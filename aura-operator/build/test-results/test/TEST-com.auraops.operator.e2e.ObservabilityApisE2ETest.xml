@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.auraops.operator.e2e.ObservabilityApisE2ETest" tests="1" skipped="1" failures="0" errors="0" timestamp="2026-03-24T23:18:04.407Z" hostname="WORKER" time="0.518">
+  <properties/>
+  <testcase name="collectors_canTalkToLiveLokiAndTempoApis()" classname="com.auraops.operator.e2e.ObservabilityApisE2ETest" time="0.0">
+    <skipped/>
+  </testcase>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

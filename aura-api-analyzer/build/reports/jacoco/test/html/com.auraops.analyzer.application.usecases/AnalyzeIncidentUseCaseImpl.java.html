@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AnalyzeIncidentUseCaseImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">aura-api-analyzer</a> &gt; <a href="index.source.html" class="el_package">com.auraops.analyzer.application.usecases</a> &gt; <span class="el_source">AnalyzeIncidentUseCaseImpl.java</span></div><h1>AnalyzeIncidentUseCaseImpl.java</h1><pre class="source lang-java linenums">package com.auraops.analyzer.application.usecases;
+
+import com.auraops.analyzer.application.ports.in.AnalyzeIncidentUseCase;
+import com.auraops.analyzer.application.ports.out.LLMProvider;
+import com.auraops.analyzer.application.ports.out.TelemetrySource;
+import com.auraops.analyzer.domain.model.AnalysisResult;
+import com.auraops.analyzer.domain.model.Incident;
+import com.auraops.analyzer.domain.service.IncidentAnalysisService;
+import org.springframework.stereotype.Service;
+
+import java.util.Objects;
+
+@Service
+public class AnalyzeIncidentUseCaseImpl implements AnalyzeIncidentUseCase {
+
+    private final LLMProvider llmProvider;
+    private final TelemetrySource telemetrySource;
+    private final IncidentAnalysisService incidentAnalysisService;
+
+    public AnalyzeIncidentUseCaseImpl(
+        LLMProvider llmProvider,
+        TelemetrySource telemetrySource,
+        IncidentAnalysisService incidentAnalysisService
+<span class="fc" id="L24">    ) {</span>
+<span class="fc" id="L25">        this.llmProvider = Objects.requireNonNull(llmProvider, &quot;llmProvider must not be null&quot;);</span>
+<span class="fc" id="L26">        this.telemetrySource = Objects.requireNonNull(telemetrySource, &quot;telemetrySource must not be null&quot;);</span>
+<span class="fc" id="L27">        this.incidentAnalysisService = Objects.requireNonNull(</span>
+            incidentAnalysisService,
+            &quot;incidentAnalysisService must not be null&quot;
+        );
+<span class="fc" id="L31">    }</span>
+
+    @Override
+    public AnalysisResult execute(Incident incident) {
+<span class="nc" id="L35">        Objects.requireNonNull(incident, &quot;incident must not be null&quot;);</span>
+<span class="nc" id="L36">        Incident enrichedIncident = telemetrySource.enrich(incident);</span>
+<span class="nc" id="L37">        return incidentAnalysisService.assessReadiness(enrichedIncident)</span>
+<span class="nc" id="L38">            .&lt;AnalysisResult&gt;map(result -&gt; result)</span>
+<span class="nc" id="L39">            .orElseGet(() -&gt; llmProvider.analyze(enrichedIncident));</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.14.202510111229</span></div></body></html>

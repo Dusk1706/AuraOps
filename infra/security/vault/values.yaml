@@ -1,0 +1,29 @@
+global:
+  enabled: true
+  tlsDisable: true
+
+injector:
+  enabled: true
+  # Habilitamos el inyector en todos los namespaces, o especificamos solo el de la app
+  agentDefaults:
+    cpuRequest: "10m"
+    cpuLimit: "50m"
+    memRequest: "32Mi"
+    memLimit: "64Mi"
+
+server:
+  # Ejecutamos Vault en modo dev para facilitar las pruebas sin necesidad de inicializar y desellar manualmente
+  dev:
+    enabled: true
+    # Contrasena predeterminada de root en dev (solo para pruebas)
+    devRootToken: "root"
+
+  dataStorage:
+    enabled: false
+  
+  auditStorage:
+    enabled: false
+
+ui:
+  enabled: true
+  serviceType: "ClusterIP"

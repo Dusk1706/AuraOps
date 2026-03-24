@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AnalyzerClientProperties.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">aura-operator</a> &gt; <a href="index.source.html" class="el_package">com.auraops.operator.config</a> &gt; <span class="el_source">AnalyzerClientProperties.java</span></div><h1>AnalyzerClientProperties.java</h1><pre class="source lang-java linenums">package com.auraops.operator.config;
+
+import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import java.time.Duration;
+
+@ConfigurationProperties(prefix = &quot;auraops.analyzer&quot;)
+<span class="fc" id="L8">public class AnalyzerClientProperties {</span>
+
+<span class="fc" id="L10">    private String baseUrl = &quot;http://localhost:8080&quot;;</span>
+<span class="fc" id="L11">    private String analyzePath = &quot;/api/v1/analyze&quot;;</span>
+<span class="fc" id="L12">    private Duration connectTimeout = Duration.ofSeconds(2);</span>
+<span class="fc" id="L13">    private Duration readTimeout = Duration.ofSeconds(10);</span>
+
+    public String getBaseUrl() {
+<span class="fc" id="L16">        return baseUrl;</span>
+    }
+
+    public void setBaseUrl(String baseUrl) {
+<span class="fc" id="L20">        this.baseUrl = baseUrl;</span>
+<span class="fc" id="L21">    }</span>
+
+    public String getAnalyzePath() {
+<span class="fc" id="L24">        return analyzePath;</span>
+    }
+
+    public void setAnalyzePath(String analyzePath) {
+<span class="fc" id="L28">        this.analyzePath = analyzePath;</span>
+<span class="fc" id="L29">    }</span>
+
+    public Duration getConnectTimeout() {
+<span class="nc" id="L32">        return connectTimeout;</span>
+    }
+
+    public void setConnectTimeout(Duration connectTimeout) {
+<span class="nc" id="L36">        this.connectTimeout = connectTimeout;</span>
+<span class="nc" id="L37">    }</span>
+
+    public Duration getReadTimeout() {
+<span class="nc" id="L40">        return readTimeout;</span>
+    }
+
+    public void setReadTimeout(Duration readTimeout) {
+<span class="nc" id="L44">        this.readTimeout = readTimeout;</span>
+<span class="nc" id="L45">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.14.202510111229</span></div></body></html>

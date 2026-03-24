@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.auraops.operator.infrastructure.observability.TempoTraceCollectorTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-03-24T23:18:05.921Z" hostname="WORKER" time="0.007">
+  <properties/>
+  <testcase name="collect_readsTraceSummariesFromTempoSearch()" classname="com.auraops.operator.infrastructure.observability.TempoTraceCollectorTest" time="0.007"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ObservabilityProperties.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">aura-operator</a> &gt; <a href="index.source.html" class="el_package">com.auraops.operator.config</a> &gt; <span class="el_source">ObservabilityProperties.java</span></div><h1>ObservabilityProperties.java</h1><pre class="source lang-java linenums">package com.auraops.operator.config;
+
+import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import java.time.Duration;
+
+@ConfigurationProperties(prefix = &quot;auraops.observability&quot;)
+<span class="fc" id="L8">public class ObservabilityProperties {</span>
+
+<span class="fc" id="L10">    private final Loki loki = new Loki();</span>
+<span class="fc" id="L11">    private final Tempo tempo = new Tempo();</span>
+
+    public Loki getLoki() {
+<span class="fc" id="L14">        return loki;</span>
+    }
+
+    public Tempo getTempo() {
+<span class="fc" id="L18">        return tempo;</span>
+    }
+
+<span class="fc" id="L21">    public static class Loki {</span>
+
+<span class="fc" id="L23">        private boolean enabled = false;</span>
+<span class="fc" id="L24">        private String baseUrl = &quot;http://localhost:3100&quot;;</span>
+<span class="fc" id="L25">        private String queryRangePath = &quot;/loki/api/v1/query_range&quot;;</span>
+<span class="fc" id="L26">        private String labelName = &quot;app&quot;;</span>
+<span class="fc" id="L27">        private Duration lookback = Duration.ofMinutes(5);</span>
+<span class="fc" id="L28">        private Duration connectTimeout = Duration.ofSeconds(2);</span>
+<span class="fc" id="L29">        private Duration readTimeout = Duration.ofSeconds(5);</span>
+
+        public boolean isEnabled() {
+<span class="fc" id="L32">            return enabled;</span>
+        }
+
+        public void setEnabled(boolean enabled) {
+<span class="fc" id="L36">            this.enabled = enabled;</span>
+<span class="fc" id="L37">        }</span>
+
+        public String getBaseUrl() {
+<span class="fc" id="L40">            return baseUrl;</span>
+        }
+
+        public void setBaseUrl(String baseUrl) {
+<span class="fc" id="L44">            this.baseUrl = baseUrl;</span>
+<span class="fc" id="L45">        }</span>
+
+        public String getQueryRangePath() {
+<span class="fc" id="L48">            return queryRangePath;</span>
+        }
+
+        public void setQueryRangePath(String queryRangePath) {
+<span class="nc" id="L52">            this.queryRangePath = queryRangePath;</span>
+<span class="nc" id="L53">        }</span>
+
+        public String getLabelName() {
+<span class="fc" id="L56">            return labelName;</span>
+        }
+
+        public void setLabelName(String labelName) {
+<span class="nc" id="L60">            this.labelName = labelName;</span>
+<span class="nc" id="L61">        }</span>
+
+        public Duration getLookback() {
+<span class="fc" id="L64">            return lookback;</span>
+        }
+
+        public void setLookback(Duration lookback) {
+<span class="nc" id="L68">            this.lookback = lookback;</span>
+<span class="nc" id="L69">        }</span>
+
+        public Duration getConnectTimeout() {
+<span class="nc" id="L72">            return connectTimeout;</span>
+        }
+
+        public void setConnectTimeout(Duration connectTimeout) {
+<span class="nc" id="L76">            this.connectTimeout = connectTimeout;</span>
+<span class="nc" id="L77">        }</span>
+
+        public Duration getReadTimeout() {
+<span class="nc" id="L80">            return readTimeout;</span>
+        }
+
+        public void setReadTimeout(Duration readTimeout) {
+<span class="nc" id="L84">            this.readTimeout = readTimeout;</span>
+<span class="nc" id="L85">        }</span>
+    }
+
+<span class="fc" id="L88">    public static class Tempo {</span>
+
+<span class="fc" id="L90">        private boolean enabled = false;</span>
+<span class="fc" id="L91">        private String baseUrl = &quot;http://localhost:3200&quot;;</span>
+<span class="fc" id="L92">        private String searchPath = &quot;/api/search&quot;;</span>
+<span class="fc" id="L93">        private Duration lookback = Duration.ofMinutes(5);</span>
+<span class="fc" id="L94">        private int limit = 5;</span>
+<span class="fc" id="L95">        private Duration connectTimeout = Duration.ofSeconds(2);</span>
+<span class="fc" id="L96">        private Duration readTimeout = Duration.ofSeconds(5);</span>
+
+        public boolean isEnabled() {
+<span class="fc" id="L99">            return enabled;</span>
+        }
+
+        public void setEnabled(boolean enabled) {
+<span class="fc" id="L103">            this.enabled = enabled;</span>
+<span class="fc" id="L104">        }</span>
+
+        public String getBaseUrl() {
+<span class="fc" id="L107">            return baseUrl;</span>
+        }
+
+        public void setBaseUrl(String baseUrl) {
+<span class="fc" id="L111">            this.baseUrl = baseUrl;</span>
+<span class="fc" id="L112">        }</span>
+
+        public String getSearchPath() {
+<span class="fc" id="L115">            return searchPath;</span>
+        }
+
+        public void setSearchPath(String searchPath) {
+<span class="nc" id="L119">            this.searchPath = searchPath;</span>
+<span class="nc" id="L120">        }</span>
+
+        public Duration getLookback() {
+<span class="fc" id="L123">            return lookback;</span>
+        }
+
+        public void setLookback(Duration lookback) {
+<span class="nc" id="L127">            this.lookback = lookback;</span>
+<span class="nc" id="L128">        }</span>
+
+        public int getLimit() {
+<span class="fc" id="L131">            return limit;</span>
+        }
+
+        public void setLimit(int limit) {
+<span class="nc" id="L135">            this.limit = limit;</span>
+<span class="nc" id="L136">        }</span>
+
+        public Duration getConnectTimeout() {
+<span class="nc" id="L139">            return connectTimeout;</span>
+        }
+
+        public void setConnectTimeout(Duration connectTimeout) {
+<span class="nc" id="L143">            this.connectTimeout = connectTimeout;</span>
+<span class="nc" id="L144">        }</span>
+
+        public Duration getReadTimeout() {
+<span class="nc" id="L147">            return readTimeout;</span>
+        }
+
+        public void setReadTimeout(Duration readTimeout) {
+<span class="nc" id="L151">            this.readTimeout = readTimeout;</span>
+<span class="nc" id="L152">        }</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.14.202510111229</span></div></body></html>

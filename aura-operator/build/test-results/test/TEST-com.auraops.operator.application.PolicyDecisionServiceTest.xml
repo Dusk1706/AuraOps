@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.auraops.operator.application.PolicyDecisionServiceTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-03-24T23:18:02.060Z" hostname="WORKER" time="0.031">
+  <properties/>
+  <testcase name="evaluate_acceptsRestartAllowedByPolicy()" classname="com.auraops.operator.application.PolicyDecisionServiceTest" time="0.025"/>
+  <testcase name="evaluate_rejectsWhenConfidenceBelowThreshold()" classname="com.auraops.operator.application.PolicyDecisionServiceTest" time="0.001"/>
+  <testcase name="evaluate_capsScaleOutAtPolicyMaximum()" classname="com.auraops.operator.application.PolicyDecisionServiceTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

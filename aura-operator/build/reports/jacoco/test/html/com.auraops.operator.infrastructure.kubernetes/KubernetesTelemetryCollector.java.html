@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>KubernetesTelemetryCollector.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">aura-operator</a> &gt; <a href="index.source.html" class="el_package">com.auraops.operator.infrastructure.kubernetes</a> &gt; <span class="el_source">KubernetesTelemetryCollector.java</span></div><h1>KubernetesTelemetryCollector.java</h1><pre class="source lang-java linenums">package com.auraops.operator.infrastructure.kubernetes;
+
+import com.auraops.operator.application.IncidentContext;
+import com.auraops.operator.config.HealerProperties;
+import com.auraops.operator.infrastructure.observability.LokiLogCollector;
+import com.auraops.operator.infrastructure.observability.TempoTraceCollector;
+import io.fabric8.kubernetes.api.model.ContainerStatus;
+import io.fabric8.kubernetes.api.model.Pod;
+import io.fabric8.kubernetes.api.model.PodList;
+import io.fabric8.kubernetes.api.model.apps.Deployment;
+import io.fabric8.kubernetes.client.KubernetesClient;
+import org.springframework.stereotype.Component;
+
+import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+
+@Component
+public class KubernetesTelemetryCollector {
+
+    public static final String TELEMETRY_STATUS_KEY = &quot;telemetryStatus&quot;;
+    public static final String TELEMETRY_REASONS_KEY = &quot;telemetryUnavailableReasons&quot;;
+    public static final String TELEMETRY_AVAILABLE = &quot;AVAILABLE&quot;;
+    public static final String TELEMETRY_UNAVAILABLE = &quot;TELEMETRY_UNAVAILABLE&quot;;
+
+    private final KubernetesClient kubernetesClient;
+    private final HealerProperties healerProperties;
+    private final LokiLogCollector lokiLogCollector;
+    private final TempoTraceCollector tempoTraceCollector;
+
+    public KubernetesTelemetryCollector(
+        KubernetesClient kubernetesClient,
+        HealerProperties healerProperties,
+        LokiLogCollector lokiLogCollector,
+        TempoTraceCollector tempoTraceCollector
+<span class="fc" id="L40">    ) {</span>
+<span class="fc" id="L41">        this.kubernetesClient = Objects.requireNonNull(kubernetesClient);</span>
+<span class="fc" id="L42">        this.healerProperties = Objects.requireNonNull(healerProperties);</span>
+<span class="fc" id="L43">        this.lokiLogCollector = Objects.requireNonNull(lokiLogCollector);</span>
+<span class="fc" id="L44">        this.tempoTraceCollector = Objects.requireNonNull(tempoTraceCollector);</span>
+<span class="fc" id="L45">    }</span>
+
+    public IncidentContext collect(Deployment deployment) {
+<span class="fc" id="L48">        String namespace = deployment.getMetadata().getNamespace();</span>
+<span class="fc" id="L49">        String deploymentName = deployment.getMetadata().getName();</span>
+<span class="fc" id="L50">        List&lt;Pod&gt; pods = loadTargetPods(deployment);</span>
+<span class="fc" id="L51">        LokiLogCollector.Result lokiResult = lokiLogCollector.collectWithStatus(deployment, healerProperties.getMaxTotalLogLines());</span>
+<span class="fc" id="L52">        TempoTraceCollector.Result tempoResult = tempoTraceCollector.collectWithStatus(deployment);</span>
+<span class="fc" id="L53">        List&lt;String&gt; logs = collectLogs(deployment, pods, lokiResult);</span>
+<span class="fc" id="L54">        List&lt;String&gt; traces = tempoResult.traces();</span>
+<span class="fc" id="L55">        int restartCount = pods.stream()</span>
+<span class="fc" id="L56">            .flatMap(pod -&gt; safeContainerStatuses(pod).stream())</span>
+<span class="fc" id="L57">            .mapToInt(ContainerStatus::getRestartCount)</span>
+<span class="fc" id="L58">            .sum();</span>
+
+<span class="fc" id="L60">        Map&lt;String, Object&gt; additionalMetrics = new LinkedHashMap&lt;&gt;();</span>
+<span class="fc bfc" id="L61" title="All 2 branches covered.">        additionalMetrics.put(&quot;readyReplicas&quot;, defaulted(deployment.getStatus() == null ? null : deployment.getStatus().getReadyReplicas()));</span>
+<span class="fc bfc" id="L62" title="All 2 branches covered.">        additionalMetrics.put(&quot;availableReplicas&quot;, defaulted(deployment.getStatus() == null ? null : deployment.getStatus().getAvailableReplicas()));</span>
+<span class="fc bfc" id="L63" title="All 2 branches covered.">        additionalMetrics.put(&quot;updatedReplicas&quot;, defaulted(deployment.getStatus() == null ? null : deployment.getStatus().getUpdatedReplicas()));</span>
+<span class="fc bfc" id="L64" title="All 2 branches covered.">        additionalMetrics.put(&quot;observedGeneration&quot;, deployment.getStatus() == null ? null : deployment.getStatus().getObservedGeneration());</span>
+<span class="fc" id="L65">        additionalMetrics.put(&quot;sampledAt&quot;, OffsetDateTime.now().toString());</span>
+<span class="fc" id="L66">        addTelemetryStatus(additionalMetrics, lokiResult, tempoResult);</span>
+
+<span class="fc" id="L68">        return new IncidentContext(</span>
+<span class="fc" id="L69">            namespace + &quot;/&quot; + deploymentName + &quot;/&quot; + OffsetDateTime.now().toEpochSecond(),</span>
+            namespace,
+            deploymentName,
+            logs,
+            traces,
+            &quot;unknown&quot;,
+            &quot;unknown&quot;,
+            restartCount,
+            additionalMetrics
+        );
+    }
+
+    private List&lt;Pod&gt; loadTargetPods(Deployment deployment) {
+<span class="fc" id="L82">        Map&lt;String, String&gt; labels = deployment.getSpec().getSelector().getMatchLabels();</span>
+<span class="pc bpc" id="L83" title="2 of 4 branches missed.">        if (labels == null || labels.isEmpty()) {</span>
+<span class="nc" id="L84">            return List.of();</span>
+        }
+<span class="fc" id="L86">        PodList podList = kubernetesClient.pods()</span>
+<span class="fc" id="L87">            .inNamespace(deployment.getMetadata().getNamespace())</span>
+<span class="fc" id="L88">            .withLabels(labels)</span>
+<span class="fc" id="L89">            .list();</span>
+<span class="pc bpc" id="L90" title="2 of 4 branches missed.">        return podList == null || podList.getItems() == null ? List.of() : podList.getItems();</span>
+    }
+
+    private List&lt;String&gt; collectLogs(Deployment deployment, List&lt;Pod&gt; pods, LokiLogCollector.Result lokiResult) {
+<span class="fc" id="L94">        List&lt;String&gt; externalLogs = lokiResult.logs();</span>
+<span class="fc bfc" id="L95" title="All 2 branches covered.">        if (!externalLogs.isEmpty()) {</span>
+<span class="fc" id="L96">            return externalLogs;</span>
+        }
+
+<span class="fc" id="L99">        List&lt;String&gt; collected = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L100">        pods.stream()</span>
+<span class="pc" id="L101">            .sorted(Comparator.comparing(pod -&gt; pod.getMetadata().getName()))</span>
+<span class="fc" id="L102">            .forEach(pod -&gt; {</span>
+<span class="pc bpc" id="L103" title="1 of 2 branches missed.">                if (collected.size() &gt;= healerProperties.getMaxTotalLogLines()) {</span>
+<span class="nc" id="L104">                    return;</span>
+                }
+<span class="fc" id="L106">                String summary = summarizePodState(pod);</span>
+<span class="pc bpc" id="L107" title="1 of 2 branches missed.">                if (!summary.isBlank()) {</span>
+<span class="fc" id="L108">                    collected.add(summary);</span>
+                }
+                try {
+<span class="fc" id="L111">                    String rawLog = kubernetesClient.pods()</span>
+<span class="fc" id="L112">                        .inNamespace(pod.getMetadata().getNamespace())</span>
+<span class="fc" id="L113">                        .withName(pod.getMetadata().getName())</span>
+<span class="fc" id="L114">                        .tailingLines(healerProperties.getLogLinesPerPod())</span>
+<span class="fc" id="L115">                        .getLog();</span>
+<span class="pc bpc" id="L116" title="2 of 4 branches missed.">                    if (rawLog != null &amp;&amp; !rawLog.isBlank()) {</span>
+<span class="fc bfc" id="L117" title="All 2 branches covered.">                        for (String line : rawLog.lines().toList()) {</span>
+<span class="pc bpc" id="L118" title="1 of 2 branches missed.">                            if (line.isBlank()) {</span>
+<span class="nc" id="L119">                                continue;</span>
+                            }
+<span class="fc" id="L121">                            collected.add(&quot;[&quot; + pod.getMetadata().getName() + &quot;] &quot; + line);</span>
+<span class="pc bpc" id="L122" title="1 of 2 branches missed.">                            if (collected.size() &gt;= healerProperties.getMaxTotalLogLines()) {</span>
+<span class="nc" id="L123">                                break;</span>
+                            }
+<span class="fc" id="L125">                        }</span>
+                    }
+<span class="nc" id="L127">                } catch (Exception ex) {</span>
+<span class="nc" id="L128">                    collected.add(&quot;[&quot; + pod.getMetadata().getName() + &quot;] log collection failed: &quot; + ex.getClass().getSimpleName());</span>
+<span class="fc" id="L129">                }</span>
+<span class="fc" id="L130">            });</span>
+
+<span class="pc bpc" id="L132" title="1 of 2 branches missed.">        if (collected.isEmpty()) {</span>
+<span class="nc" id="L133">            return List.of(&quot;No pod logs were available; using deployment and pod state only.&quot;);</span>
+        }
+<span class="fc" id="L135">        return collected;</span>
+    }
+
+    private void addTelemetryStatus(
+        Map&lt;String, Object&gt; additionalMetrics,
+        LokiLogCollector.Result lokiResult,
+        TempoTraceCollector.Result tempoResult
+    ) {
+<span class="fc" id="L143">        List&lt;String&gt; unavailableReasons = new ArrayList&lt;&gt;();</span>
+<span class="pc bpc" id="L144" title="1 of 4 branches missed.">        if (lokiResult.enabled() &amp;&amp; !lokiResult.available()) {</span>
+<span class="nc" id="L145">            unavailableReasons.add(reason(lokiResult.reasonCode(), lokiResult.reason()));</span>
+        }
+<span class="pc bpc" id="L147" title="1 of 4 branches missed.">        if (tempoResult.enabled() &amp;&amp; !tempoResult.available()) {</span>
+<span class="nc" id="L148">            unavailableReasons.add(reason(tempoResult.reasonCode(), tempoResult.reason()));</span>
+        }
+
+<span class="pc bpc" id="L151" title="1 of 2 branches missed.">        if (unavailableReasons.isEmpty()) {</span>
+<span class="fc" id="L152">            additionalMetrics.put(TELEMETRY_STATUS_KEY, TELEMETRY_AVAILABLE);</span>
+<span class="fc" id="L153">            additionalMetrics.put(TELEMETRY_REASONS_KEY, List.of());</span>
+<span class="fc" id="L154">            return;</span>
+        }
+<span class="nc" id="L156">        additionalMetrics.put(TELEMETRY_STATUS_KEY, TELEMETRY_UNAVAILABLE);</span>
+<span class="nc" id="L157">        additionalMetrics.put(TELEMETRY_REASONS_KEY, unavailableReasons);</span>
+<span class="nc" id="L158">    }</span>
+
+    private String reason(String code, String message) {
+<span class="nc bnc" id="L161" title="All 2 branches missed.">        String normalizedCode = code == null ? &quot;TELEMETRY_ERROR&quot; : code;</span>
+<span class="nc bnc" id="L162" title="All 2 branches missed.">        String normalizedMessage = message == null ? &quot;No additional details&quot; : message;</span>
+<span class="nc" id="L163">        return normalizedCode + &quot;: &quot; + normalizedMessage;</span>
+    }
+
+    private String summarizePodState(Pod pod) {
+<span class="fc" id="L167">        List&lt;String&gt; parts = new ArrayList&lt;&gt;();</span>
+<span class="pc bpc" id="L168" title="1 of 2 branches missed.">        parts.add(&quot;[&quot; + pod.getMetadata().getName() + &quot;] phase=&quot; + defaultString(pod.getStatus() == null ? null : pod.getStatus().getPhase()));</span>
+<span class="fc bfc" id="L169" title="All 2 branches covered.">        for (ContainerStatus status : safeContainerStatuses(pod)) {</span>
+<span class="pc bpc" id="L170" title="2 of 4 branches missed.">            if (status.getState() != null &amp;&amp; status.getState().getWaiting() != null) {</span>
+<span class="fc" id="L171">                parts.add(status.getName() + &quot; waiting=&quot; + defaultString(status.getState().getWaiting().getReason()));</span>
+            }
+<span class="pc bpc" id="L173" title="2 of 4 branches missed.">            if (status.getState() != null &amp;&amp; status.getState().getTerminated() != null) {</span>
+<span class="nc" id="L174">                parts.add(status.getName() + &quot; terminated=&quot; + defaultString(status.getState().getTerminated().getReason()));</span>
+            }
+<span class="pc bpc" id="L176" title="1 of 2 branches missed.">            if (status.getRestartCount() &gt; 0) {</span>
+<span class="fc" id="L177">                parts.add(status.getName() + &quot; restarts=&quot; + status.getRestartCount());</span>
+            }
+<span class="fc" id="L179">        }</span>
+<span class="fc" id="L180">        return String.join(&quot; &quot;, parts);</span>
+    }
+
+    private List&lt;ContainerStatus&gt; safeContainerStatuses(Pod pod) {
+<span class="pc bpc" id="L184" title="2 of 4 branches missed.">        if (pod.getStatus() == null || pod.getStatus().getContainerStatuses() == null) {</span>
+<span class="nc" id="L185">            return List.of();</span>
+        }
+<span class="fc" id="L187">        return pod.getStatus().getContainerStatuses();</span>
+    }
+
+    private Integer defaulted(Integer value) {
+<span class="fc bfc" id="L191" title="All 2 branches covered.">        return value == null ? 0 : value;</span>
+    }
+
+    private String defaultString(String value) {
+<span class="pc bpc" id="L195" title="1 of 2 branches missed.">        return value == null ? &quot;unknown&quot; : value;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.14.202510111229</span></div></body></html>

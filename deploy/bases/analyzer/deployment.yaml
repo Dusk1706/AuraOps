@@ -13,7 +13,17 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: aura-api-analyzer
+      annotations:
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/role: "aura-api-analyzer"
+        vault.hashicorp.com/agent-inject-secret-application.properties: "secret/data/auraops/analyzer"
+        vault.hashicorp.com/agent-inject-template-application.properties: |
+          {{- with secret "secret/data/auraops/analyzer" -}}
+          spring.ai.openai.api-key={{ index .Data.data "openai-api-key" }}
+          spring.ai.anthropic.api-key={{ index .Data.data "anthropic-api-key" }}
+          {{- end -}}
     spec:
+      serviceAccountName: aura-api-analyzer
       containers:
         - name: analyzer
           image: auraops/aura-api-analyzer:latest
@@ -26,10 +36,8 @@ spec:
               value: ollama
             - name: OLLAMA_BASE_URL
               value: http://ollama.ollama.svc.cluster.local:11434
-            - name: OPENAI_API_KEY
-              value: ""
-            - name: ANTHROPIC_API_KEY
-              value: ""
+            - name: SPRING_CONFIG_IMPORT
+              value: optional:file:/vault/secrets/application.properties
           readinessProbe:
             httpGet:
               path: /actuator/health

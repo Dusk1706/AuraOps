@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.auraops.operator.integration.HealerPolicyReconcilerIntegrationTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-03-24T23:18:05.936Z" hostname="WORKER" time="3.428">
+  <properties/>
+  <testcase name="reconcile_rollsDeploymentAndUpdatesPolicyStatusAgainstSimulatedCluster()" classname="com.auraops.operator.integration.HealerPolicyReconcilerIntegrationTest" time="1.589"/>
+  <system-out><![CDATA[16:18:07.462 [Test worker] WARN io.fabric8.kubernetes.client.utils.HttpClientUtils -- The following httpclient factories were detected on your classpath: [io.fabric8.kubernetes.client.jdkhttp.JdkHttpClientFactory, io.fabric8.kubernetes.client.vertx.VertxHttpClientFactory], multiple of which had the same priority (0) so one was chosen randomly. You should exclude dependencies that aren't needed or use an explicit association of the HttpClient.Factory.
+16:18:08.247 [Test worker] WARN io.fabric8.kubernetes.client.utils.HttpClientUtils -- The following httpclient factories were detected on your classpath: [io.fabric8.kubernetes.client.jdkhttp.JdkHttpClientFactory, io.fabric8.kubernetes.client.vertx.VertxHttpClientFactory], multiple of which had the same priority (0) so one was chosen randomly. You should exclude dependencies that aren't needed or use an explicit association of the HttpClient.Factory.
+16:18:09.302 [Test worker] INFO com.auraops.operator.controller.HealerPolicyReconciler -- Executing healing action ROLLING_RESTART for deployment payments/payments-api
+16:18:09.352 [Test worker] INFO com.auraops.operator.controller.HealerPolicyReconciler -- Healing successful for payments/payments-api
+]]></system-out>
+  <system-err><![CDATA[Mar 24, 2026 4:18:07 PM io.fabric8.mockwebserver.MockWebServer info
+INFO: MockWebServer[51782] starting to accept connections on localhost
+Mar 24, 2026 4:18:08 PM io.fabric8.mockwebserver.MockWebServer info
+INFO: MockWebServer[51783] starting to accept connections on localhost
+Mar 24, 2026 4:18:08 PM io.fabric8.mockwebserver.MockWebServer info
+INFO: MockWebServer[51783] received request: POST /api/v1/namespaces HTTP/1.1 and responded: HTTP/1.1 201 Created
+Mar 24, 2026 4:18:08 PM io.fabric8.mockwebserver.MockWebServer info
+INFO: MockWebServer[51783] received request: POST /apis/apps/v1/namespaces/payments/deployments HTTP/1.1 and responded: HTTP/1.1 201 Created
+Mar 24, 2026 4:18:09 PM io.fabric8.mockwebserver.MockWebServer info
+INFO: MockWebServer[51783] received request: POST /api/v1/namespaces/payments/pods HTTP/1.1 and responded: HTTP/1.1 201 Created
+Mar 24, 2026 4:18:09 PM io.fabric8.mockwebserver.MockWebServer info
+INFO: MockWebServer[51783] received request: GET /apis/apps/v1/namespaces/payments/deployments/payments-api HTTP/1.1 and responded: HTTP/1.1 200 OK
+Mar 24, 2026 4:18:09 PM io.fabric8.mockwebserver.MockWebServer info
+INFO: MockWebServer[51783] received request: GET /api/v1/namespaces/payments/pods?labelSelector=app%3Dpayments-api HTTP/1.1 and responded: HTTP/1.1 200 OK
+Mar 24, 2026 4:18:09 PM io.fabric8.mockwebserver.MockWebServer info
+INFO: MockWebServer[51783] received request: GET /api/v1/namespaces/payments/pods?fieldSelector=metadata.name%3Dpayments-api-7d8f6f7d9b-abc12 HTTP/1.1 and responded: HTTP/1.1 200 OK
+Mar 24, 2026 4:18:09 PM io.fabric8.mockwebserver.MockWebServer info
+INFO: MockWebServer[51783] received request: GET /api/v1/namespaces/payments/pods/payments-api-7d8f6f7d9b-abc12/log?pretty=false&tailLines=100 HTTP/1.1 and responded: HTTP/1.1 200 OK
+Mar 24, 2026 4:18:09 PM io.fabric8.mockwebserver.MockWebServer info
+INFO: MockWebServer[51783] received request: GET /apis/apps/v1/namespaces/payments/deployments/payments-api HTTP/1.1 and responded: HTTP/1.1 200 OK
+Mar 24, 2026 4:18:09 PM io.fabric8.mockwebserver.MockWebServer info
+INFO: MockWebServer[51783] received request: PATCH /apis/apps/v1/namespaces/payments/deployments/payments-api HTTP/1.1 and responded: HTTP/1.1 202 Accepted
+Mar 24, 2026 4:18:09 PM io.fabric8.mockwebserver.MockWebServer info
+INFO: MockWebServer[51783] received request: GET /apis/apps/v1/namespaces/payments/deployments/payments-api HTTP/1.1 and responded: HTTP/1.1 200 OK
+Mar 24, 2026 4:18:09 PM io.fabric8.mockwebserver.MockWebServer info
+INFO: MockWebServer[51783] received request: GET /apis/apps/v1/namespaces/payments/deployments/payments-api HTTP/1.1 and responded: HTTP/1.1 200 OK
+Mar 24, 2026 4:18:09 PM io.fabric8.mockwebserver.MockWebServer info
+INFO: MockWebServer[51783] received request: GET /apis/apps/v1/namespaces/payments/deployments/payments-api HTTP/1.1 and responded: HTTP/1.1 200 OK
+Mar 24, 2026 4:18:09 PM io.fabric8.mockwebserver.MockWebServer info
+INFO: MockWebServer[51783] done accepting connections
+Mar 24, 2026 4:18:09 PM io.fabric8.mockwebserver.MockWebServer info
+INFO: MockWebServer[51782] done accepting connections
+]]></system-err>
+</testsuite>

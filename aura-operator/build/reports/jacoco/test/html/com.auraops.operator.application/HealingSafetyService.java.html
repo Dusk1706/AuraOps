@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>HealingSafetyService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">aura-operator</a> &gt; <a href="index.source.html" class="el_package">com.auraops.operator.application</a> &gt; <span class="el_source">HealingSafetyService.java</span></div><h1>HealingSafetyService.java</h1><pre class="source lang-java linenums">package com.auraops.operator.application;
+
+import com.auraops.operator.config.HealerProperties;
+import com.auraops.operator.domain.HealingActionType;
+import io.fabric8.kubernetes.api.model.IntOrString;
+import io.fabric8.kubernetes.api.model.apps.Deployment;
+import org.springframework.stereotype.Service;
+
+import java.util.Objects;
+
+@Service
+public class HealingSafetyService {
+
+    private final HealerProperties healerProperties;
+
+<span class="fc" id="L16">    public HealingSafetyService(HealerProperties healerProperties) {</span>
+<span class="fc" id="L17">        this.healerProperties = Objects.requireNonNull(healerProperties);</span>
+<span class="fc" id="L18">    }</span>
+
+    public PolicyDecision validate(ActionPlan plan, Deployment deployment) {
+<span class="pc bpc" id="L21" title="1 of 2 branches missed.">        if (plan.actionType() == HealingActionType.SCALE_OUT) {</span>
+<span class="nc" id="L22">            return new PolicyDecision.Execute(plan);</span>
+        }
+<span class="pc bpc" id="L24" title="2 of 4 branches missed.">        if (deployment.getSpec() == null || deployment.getSpec().getStrategy() == null) {</span>
+<span class="nc" id="L25">            return new PolicyDecision.Execute(plan);</span>
+        }
+<span class="fc" id="L27">        String strategyType = deployment.getSpec().getStrategy().getType();</span>
+<span class="fc bfc" id="L28" title="All 2 branches covered.">        if (&quot;Recreate&quot;.equalsIgnoreCase(strategyType)) {</span>
+<span class="fc" id="L29">            return new PolicyDecision.Reject(&quot;Recreate strategy would impact more than the allowed 25% of pods&quot;);</span>
+        }
+
+<span class="fc" id="L32">        int replicas = Math.max(1, plan.currentReplicas());</span>
+<span class="fc" id="L33">        int allowedImpact = Math.max(1, (int) Math.ceil(replicas * healerProperties.getMaxImpactRatio()));</span>
+<span class="pc bpc" id="L34" title="1 of 2 branches missed.">        IntOrString maxUnavailable = deployment.getSpec().getStrategy().getRollingUpdate() == null</span>
+<span class="nc" id="L35">            ? null</span>
+<span class="fc" id="L36">            : deployment.getSpec().getStrategy().getRollingUpdate().getMaxUnavailable();</span>
+<span class="fc" id="L37">        int configuredImpact = resolveMaxUnavailable(maxUnavailable, replicas);</span>
+<span class="fc bfc" id="L38" title="All 2 branches covered.">        if (configuredImpact &gt; allowedImpact) {</span>
+<span class="fc" id="L39">            return new PolicyDecision.Reject(</span>
+                &quot;Deployment rolling update allows %d unavailable pods, exceeding the policy max of %d&quot;
+<span class="fc" id="L41">                    .formatted(configuredImpact, allowedImpact)</span>
+            );
+        }
+<span class="fc" id="L44">        return new PolicyDecision.Execute(plan);</span>
+    }
+
+    private int resolveMaxUnavailable(IntOrString maxUnavailable, int replicas) {
+<span class="pc bpc" id="L48" title="1 of 2 branches missed.">        if (maxUnavailable == null) {</span>
+<span class="nc" id="L49">            return Math.max(1, (int) Math.ceil(replicas * 0.25d));</span>
+        }
+<span class="pc bpc" id="L51" title="1 of 2 branches missed.">        if (maxUnavailable.getIntVal() != null) {</span>
+<span class="nc" id="L52">            return maxUnavailable.getIntVal();</span>
+        }
+<span class="fc" id="L54">        String value = maxUnavailable.getStrVal();</span>
+<span class="pc bpc" id="L55" title="2 of 4 branches missed.">        if (value != null &amp;&amp; value.endsWith(&quot;%&quot;)) {</span>
+<span class="fc" id="L56">            int percentage = Integer.parseInt(value.substring(0, value.length() - 1));</span>
+<span class="fc" id="L57">            return Math.max(1, (int) Math.ceil(replicas * (percentage / 100.0d)));</span>
+        }
+<span class="nc" id="L59">        return Math.max(1, Integer.parseInt(value));</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.14.202510111229</span></div></body></html>

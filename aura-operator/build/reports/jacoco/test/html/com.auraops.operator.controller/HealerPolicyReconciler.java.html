@@ -1,0 +1,257 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>HealerPolicyReconciler.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">aura-operator</a> &gt; <a href="index.source.html" class="el_package">com.auraops.operator.controller</a> &gt; <span class="el_source">HealerPolicyReconciler.java</span></div><h1>HealerPolicyReconciler.java</h1><pre class="source lang-java linenums">package com.auraops.operator.controller;
+
+import com.auraops.operator.application.AnalyzerClient;
+import com.auraops.operator.application.AnalyzerDecision;
+import com.auraops.operator.application.HealingRateLimiter;
+import com.auraops.operator.application.HealingSafetyService;
+import com.auraops.operator.application.PolicyDecision;
+import com.auraops.operator.application.PolicyDecisionService;
+import com.auraops.operator.crd.HealerPolicy;
+import com.auraops.operator.crd.HealerPolicyStatus;
+import com.auraops.operator.domain.HealingPhase;
+import com.auraops.operator.infrastructure.kubernetes.DeploymentActionExecutor;
+import com.auraops.operator.infrastructure.kubernetes.DeploymentReadinessVerifier;
+import com.auraops.operator.infrastructure.kubernetes.KubernetesTelemetryCollector;
+import io.fabric8.kubernetes.api.model.apps.Deployment;
+import io.fabric8.kubernetes.api.model.apps.ReplicaSet;
+import io.fabric8.kubernetes.client.KubernetesClient;
+import io.javaoperatorsdk.operator.api.reconciler.Context;
+import io.javaoperatorsdk.operator.api.reconciler.ControllerConfiguration;
+import io.javaoperatorsdk.operator.api.reconciler.EventSourceContext;
+import io.javaoperatorsdk.operator.api.reconciler.Reconciler;
+import io.javaoperatorsdk.operator.api.reconciler.UpdateControl;
+import io.javaoperatorsdk.operator.api.config.informer.InformerConfiguration;
+import io.javaoperatorsdk.operator.processing.event.ResourceID;
+import io.javaoperatorsdk.operator.processing.event.source.EventSource;
+import io.javaoperatorsdk.operator.processing.event.source.informer.InformerEventSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
+
+import java.time.Duration;
+import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+@Component
+@ControllerConfiguration
+public class HealerPolicyReconciler implements Reconciler&lt;HealerPolicy&gt; {
+
+<span class="fc" id="L43">    private static final Logger log = LoggerFactory.getLogger(HealerPolicyReconciler.class);</span>
+<span class="fc" id="L44">    private static final Duration VERIFICATION_REQUEUE_INTERVAL = Duration.ofSeconds(5);</span>
+
+    private final KubernetesClient kubernetesClient;
+    private final KubernetesTelemetryCollector telemetryCollector;
+    private final AnalyzerClient analyzerClient;
+    private final PolicyDecisionService policyDecisionService;
+    private final HealingSafetyService healingSafetyService;
+    private final HealingRateLimiter healingRateLimiter;
+    private final DeploymentActionExecutor actionExecutor;
+    private final DeploymentReadinessVerifier readinessVerifier;
+
+    public HealerPolicyReconciler(
+        KubernetesClient kubernetesClient,
+        KubernetesTelemetryCollector telemetryCollector,
+        AnalyzerClient analyzerClient,
+        PolicyDecisionService policyDecisionService,
+        HealingSafetyService healingSafetyService,
+        HealingRateLimiter healingRateLimiter,
+        DeploymentActionExecutor actionExecutor,
+        DeploymentReadinessVerifier readinessVerifier
+<span class="fc" id="L64">    ) {</span>
+<span class="fc" id="L65">        this.kubernetesClient = Objects.requireNonNull(kubernetesClient);</span>
+<span class="fc" id="L66">        this.telemetryCollector = Objects.requireNonNull(telemetryCollector);</span>
+<span class="fc" id="L67">        this.analyzerClient = Objects.requireNonNull(analyzerClient);</span>
+<span class="fc" id="L68">        this.policyDecisionService = Objects.requireNonNull(policyDecisionService);</span>
+<span class="fc" id="L69">        this.healingSafetyService = Objects.requireNonNull(healingSafetyService);</span>
+<span class="fc" id="L70">        this.healingRateLimiter = Objects.requireNonNull(healingRateLimiter);</span>
+<span class="fc" id="L71">        this.actionExecutor = Objects.requireNonNull(actionExecutor);</span>
+<span class="fc" id="L72">        this.readinessVerifier = Objects.requireNonNull(readinessVerifier);</span>
+<span class="fc" id="L73">    }</span>
+
+    @Override
+    public java.util.List&lt;EventSource&lt;?, HealerPolicy&gt;&gt; prepareEventSources(EventSourceContext&lt;HealerPolicy&gt; context) {
+<span class="nc" id="L77">        var configuration = io.javaoperatorsdk.operator.api.config.informer.InformerEventSourceConfiguration</span>
+<span class="nc" id="L78">            .from(io.fabric8.kubernetes.api.model.apps.ReplicaSet.class, HealerPolicy.class)</span>
+<span class="nc" id="L79">            .withSecondaryToPrimaryMapper(rs -&gt; {</span>
+<span class="nc bnc" id="L80" title="All 2 branches missed.">                if (rs.getMetadata().getOwnerReferences() == null) {</span>
+<span class="nc" id="L81">                    return Set.of();</span>
+                }
+<span class="nc" id="L83">                return rs.getMetadata().getOwnerReferences().stream()</span>
+<span class="nc" id="L84">                    .filter(owner -&gt; &quot;Deployment&quot;.equals(owner.getKind()))</span>
+<span class="nc" id="L85">                    .flatMap(owner -&gt; context.getPrimaryCache()</span>
+<span class="nc" id="L86">                        .list(policy -&gt; policy.getSpec().getTargetDeployment().equals(owner.getName())))</span>
+<span class="nc" id="L87">                    .map(ResourceID::fromResource)</span>
+<span class="nc" id="L88">                    .collect(Collectors.toSet());</span>
+            })
+<span class="nc" id="L90">            .build();</span>
+            
+<span class="nc" id="L92">        io.javaoperatorsdk.operator.processing.event.source.informer.InformerEventSource&lt;io.fabric8.kubernetes.api.model.apps.ReplicaSet, HealerPolicy&gt; eventSource = </span>
+            new io.javaoperatorsdk.operator.processing.event.source.informer.InformerEventSource&lt;&gt;(configuration, context);
+            
+<span class="nc" id="L95">        return java.util.List.of(eventSource);</span>
+    }
+
+    @Override
+    public UpdateControl&lt;HealerPolicy&gt; reconcile(HealerPolicy resource, Context&lt;HealerPolicy&gt; context) {
+<span class="fc" id="L100">        String namespace = resource.getMetadata().getNamespace();</span>
+<span class="fc" id="L101">        String targetName = resource.getSpec().getTargetDeployment();</span>
+
+<span class="fc" id="L103">        Deployment deployment = kubernetesClient.apps().deployments()</span>
+<span class="fc" id="L104">            .inNamespace(namespace)</span>
+<span class="fc" id="L105">            .withName(targetName)</span>
+<span class="fc" id="L106">            .get();</span>
+
+<span class="pc bpc" id="L108" title="1 of 2 branches missed.">        if (deployment == null) {</span>
+<span class="nc" id="L109">            updateStatus(resource, HealingPhase.WAITING_FOR_TARGET, null, 0.0,</span>
+<span class="nc" id="L110">                &quot;Target deployment %s was not found&quot;.formatted(targetName), null, null);</span>
+<span class="nc" id="L111">            return UpdateControl.patchStatus(resource);</span>
+        }
+
+        // 1. Handle ongoing verification
+<span class="fc bfc" id="L115" title="All 2 branches covered.">        if (isVerifying(resource)) {</span>
+<span class="fc" id="L116">            return handleVerification(resource, deployment);</span>
+        }
+
+        // 2. Telemetry &amp; Analysis
+<span class="fc" id="L120">        var incidentContext = telemetryCollector.collect(deployment);</span>
+<span class="fc bfc" id="L121" title="All 2 branches covered.">        if (isTelemetryUnavailable(incidentContext.additionalMetrics())) {</span>
+<span class="fc" id="L122">            updateStatus(resource, HealingPhase.ANALYSIS_BLOCKED, null, 0.0,</span>
+<span class="fc" id="L123">                telemetryUnavailableMessage(incidentContext.additionalMetrics()), null, null);</span>
+<span class="fc" id="L124">            return UpdateControl.patchStatus(resource);</span>
+        }
+
+<span class="fc" id="L127">        AnalyzerDecision decision = analyzerClient.analyze(incidentContext);</span>
+<span class="pc bpc" id="L128" title="1 of 2 branches missed.">        if (decision instanceof AnalyzerDecision.Failure failure) {</span>
+<span class="nc" id="L129">            updateStatus(resource, HealingPhase.ANALYSIS_BLOCKED, null, 0.0, failure.message(), null, null);</span>
+<span class="nc" id="L130">            return UpdateControl.patchStatus(resource);</span>
+        }
+<span class="fc bfc" id="L132" title="All 2 branches covered.">        if (decision instanceof AnalyzerDecision.Inconclusive inconclusive) {</span>
+<span class="fc" id="L133">            updateStatus(resource, HealingPhase.ANALYSIS_BLOCKED, null, 0.0, inconclusive.message(), null, null);</span>
+<span class="fc" id="L134">            return UpdateControl.patchStatus(resource);</span>
+        }
+
+        // 3. Policy &amp; Safety
+<span class="fc" id="L138">        AnalyzerDecision.Success success = (AnalyzerDecision.Success) decision;</span>
+<span class="fc" id="L139">        PolicyDecision policyDecision = policyDecisionService.evaluate(resource, deployment, success);</span>
+<span class="pc bpc" id="L140" title="1 of 2 branches missed.">        if (policyDecision instanceof PolicyDecision.Reject reject) {</span>
+<span class="nc" id="L141">            updateStatus(resource, HealingPhase.POLICY_BLOCKED, success.diagnosis(), success.confidence(), reject.reason(), null, null);</span>
+<span class="nc" id="L142">            return UpdateControl.patchStatus(resource);</span>
+        }
+
+<span class="fc" id="L145">        PolicyDecision.Execute executableDecision = (PolicyDecision.Execute) policyDecision;</span>
+<span class="fc" id="L146">        PolicyDecision safetyDecision = healingSafetyService.validate(executableDecision.actionPlan(), deployment);</span>
+<span class="pc bpc" id="L147" title="1 of 2 branches missed.">        if (safetyDecision instanceof PolicyDecision.Reject reject) {</span>
+<span class="nc" id="L148">            updateStatus(resource, HealingPhase.POLICY_BLOCKED, success.diagnosis(), success.confidence(), reject.reason(), null, null);</span>
+<span class="nc" id="L149">            return UpdateControl.patchStatus(resource);</span>
+        }
+
+        // 4. Rate Limiting
+<span class="pc bpc" id="L153" title="1 of 2 branches missed.">        if (!healingRateLimiter.tryAcquire()) {</span>
+<span class="nc" id="L154">            updateStatus(resource, HealingPhase.RATE_LIMITED, success.diagnosis(), success.confidence(),</span>
+                &quot;Healing rate limiter rejected the action to avoid alert storms&quot;, null, null);
+<span class="nc" id="L156">            return UpdateControl.patchStatus(resource);</span>
+        }
+
+        // 5. Execution
+<span class="fc" id="L160">        log.info(&quot;Executing healing action {} for deployment {}/{}&quot;, </span>
+<span class="fc" id="L161">            executableDecision.actionPlan().actionType(), namespace, targetName);</span>
+<span class="fc" id="L162">        actionExecutor.execute(deployment, executableDecision.actionPlan());</span>
+
+        // Refresh deployment to get the NEW generation after execution
+<span class="fc" id="L165">        Deployment refreshedDeployment = kubernetesClient.apps().deployments()</span>
+<span class="fc" id="L166">            .inNamespace(namespace)</span>
+<span class="fc" id="L167">            .withName(targetName)</span>
+<span class="fc" id="L168">            .get();</span>
+        
+<span class="pc bpc" id="L170" title="2 of 4 branches missed.">        Long expectedGeneration = (refreshedDeployment != null &amp;&amp; refreshedDeployment.getMetadata() != null)</span>
+<span class="fc" id="L171">            ? refreshedDeployment.getMetadata().getGeneration()</span>
+<span class="pc" id="L172">            : null;</span>
+
+<span class="fc" id="L174">        updateStatus(</span>
+            resource,
+            HealingPhase.VERIFYING,
+<span class="fc" id="L177">            success.diagnosis(),</span>
+<span class="fc" id="L178">            success.confidence(),</span>
+            &quot;Action executed. Verifying rollout for generation &quot; + expectedGeneration,
+<span class="fc" id="L180">            executableDecision.actionPlan().actionType().name(),</span>
+            expectedGeneration
+        );
+
+<span class="fc" id="L184">        return UpdateControl.patchStatus(resource).rescheduleAfter(VERIFICATION_REQUEUE_INTERVAL);</span>
+    }
+
+    private boolean isVerifying(HealerPolicy resource) {
+<span class="pc bpc" id="L188" title="1 of 4 branches missed.">        return resource.getStatus() != null &amp;&amp; HealingPhase.VERIFYING.name().equals(resource.getStatus().getPhase());</span>
+    }
+
+    private UpdateControl&lt;HealerPolicy&gt; handleVerification(HealerPolicy resource, Deployment deployment) {
+<span class="fc" id="L192">        HealerPolicyStatus status = resource.getStatus();</span>
+<span class="fc" id="L193">        Long expectedGen = status.getExpectedGeneration();</span>
+        
+<span class="fc" id="L195">        var verification = readinessVerifier.verify(deployment, expectedGen);</span>
+        
+<span class="fc bfc" id="L197" title="All 2 branches covered.">        if (verification.ready()) {</span>
+<span class="fc" id="L198">            log.info(&quot;Healing successful for {}/{}&quot;, deployment.getMetadata().getNamespace(), deployment.getMetadata().getName());</span>
+<span class="fc" id="L199">            updateStatus(</span>
+                resource,
+                HealingPhase.HEALED,
+<span class="fc" id="L202">                status.getAiDiagnosis(),</span>
+<span class="fc" id="L203">                status.getHealthScore(),</span>
+<span class="fc" id="L204">                verification.message(),</span>
+<span class="fc" id="L205">                status.getLastAction(),</span>
+                expectedGen
+            );
+<span class="fc" id="L208">            return UpdateControl.patchStatus(resource);</span>
+        }
+
+        // If not ready, we keep waiting
+<span class="fc" id="L212">        status.setMessage(verification.message());</span>
+<span class="fc" id="L213">        status.setTimestamp(OffsetDateTime.now());</span>
+<span class="fc" id="L214">        return UpdateControl.patchStatus(resource).rescheduleAfter(VERIFICATION_REQUEUE_INTERVAL);</span>
+    }
+
+    private void updateStatus(
+        HealerPolicy resource,
+        HealingPhase phase,
+        String diagnosis,
+        Double healthScore,
+        String message,
+        String lastAction,
+        Long expectedGeneration
+    ) {
+<span class="fc bfc" id="L226" title="All 2 branches covered.">        HealerPolicyStatus status = resource.getStatus() == null ? new HealerPolicyStatus() : resource.getStatus();</span>
+<span class="fc" id="L227">        status.setPhase(phase.name());</span>
+<span class="fc" id="L228">        status.setAiDiagnosis(diagnosis);</span>
+<span class="fc" id="L229">        status.setHealthScore(healthScore);</span>
+<span class="fc" id="L230">        status.setMessage(message);</span>
+<span class="fc" id="L231">        status.setLastAction(lastAction);</span>
+<span class="fc" id="L232">        status.setObservedDeployment(resource.getSpec().getTargetDeployment());</span>
+<span class="fc" id="L233">        status.setExpectedGeneration(expectedGeneration);</span>
+<span class="fc" id="L234">        status.setTimestamp(OffsetDateTime.now());</span>
+<span class="fc" id="L235">        resource.setStatus(status);</span>
+<span class="fc" id="L236">    }</span>
+
+    private boolean isTelemetryUnavailable(Map&lt;String, Object&gt; additionalMetrics) {
+<span class="pc bpc" id="L239" title="1 of 2 branches missed.">        if (additionalMetrics == null) {</span>
+<span class="nc" id="L240">            return false;</span>
+        }
+<span class="fc" id="L242">        Object status = additionalMetrics.get(KubernetesTelemetryCollector.TELEMETRY_STATUS_KEY);</span>
+<span class="fc" id="L243">        return KubernetesTelemetryCollector.TELEMETRY_UNAVAILABLE.equals(String.valueOf(status));</span>
+    }
+
+    private String telemetryUnavailableMessage(Map&lt;String, Object&gt; additionalMetrics) {
+<span class="pc bpc" id="L247" title="1 of 2 branches missed.">        if (additionalMetrics == null) {</span>
+<span class="nc" id="L248">            return &quot;Telemetry is unavailable&quot;;</span>
+        }
+<span class="fc" id="L250">        Object reasons = additionalMetrics.get(KubernetesTelemetryCollector.TELEMETRY_REASONS_KEY);</span>
+<span class="pc bpc" id="L251" title="2 of 4 branches missed.">        if (reasons instanceof List&lt;?&gt; values &amp;&amp; !values.isEmpty()) {</span>
+<span class="fc" id="L252">            return &quot;Telemetry unavailable: &quot; + String.join(&quot;; &quot;, values.stream().map(String::valueOf).toList());</span>
+        }
+<span class="nc" id="L254">        return &quot;Telemetry unavailable: observability backends are unreachable&quot;;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.14.202510111229</span></div></body></html>

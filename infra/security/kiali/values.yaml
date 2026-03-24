@@ -1,0 +1,15 @@
+auth:
+  strategy: anonymous
+
+external_services:
+  prometheus:
+    # URL al Prometheus que provee el stack de observabilidad actual (si esta habilitado) o el de Istio
+    url: "http://prometheus.monitoring.svc.cluster.local:9090"
+  tracing:
+    enabled: true
+    provider: "tempo"
+    in_cluster_url: "http://tempo.monitoring.svc.cluster.local:3200"
+
+deployment:
+  accessible_namespaces:
+    - "**"
