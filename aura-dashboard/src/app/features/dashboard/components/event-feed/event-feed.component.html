@@ -1,0 +1,29 @@
+<mat-card appearance="outlined" class="panel-card">
+  <mat-card-header>
+    <mat-card-title>Live events</mat-card-title>
+  </mat-card-header>
+  <mat-card-content>
+    <div class="terminal-feed">
+      @if (events().length === 0) {
+        <p class="empty">Awaiting realtime events from Operator and Analyzer...</p>
+      }
+
+      @for (event of events(); track event.timestamp + event.policy) {
+        <article class="event-row">
+          <p class="event-line">
+            <span class="icon">{{ eventIcon(event.eventType) }}</span>
+            <span class="time">{{ event.timestamp | date : 'mediumTime' }}</span>
+            <span class="narrative">{{ eventNarrative(event) }}</span>
+          </p>
+          <p class="event-meta">
+            <span class="severity" [ngClass]="severityClass(event.severity)">{{ event.severity }}</span>
+            <span>{{ event.policy }} | {{ event.action }}</span>
+          </p>
+          @if (event.aiDiagnosis || event.details) {
+            <p class="event-details">{{ event.aiDiagnosis ?? event.details }}</p>
+          }
+        </article>
+      }
+    </div>
+  </mat-card-content>
+</mat-card>

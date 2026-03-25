@@ -1,0 +1,32 @@
+<mat-card appearance="outlined" class="panel-card">
+  <mat-card-header>
+    <mat-card-title>Cluster health map</mat-card-title>
+  </mat-card-header>
+  <mat-card-content>
+    <div class="node-grid">
+      @for (node of nodes(); track node.serviceName + node.namespace) {
+        <article class="node-card" [ngClass]="healthClass(node.health)">
+          <header>
+            <h3>{{ node.serviceName }}</h3>
+            <mat-chip>{{ node.namespace }}</mat-chip>
+          </header>
+          <div class="health-pill">{{ node.health }}</div>
+          <div class="healing-pill" [ngClass]="healingClass(node.healingState)">
+            @if (node.healingState === 'HEALING') {
+              <span class="pulse"></span>
+            }
+            {{ node.healingState }}
+          </div>
+          <p class="meta">Replicas {{ node.healthyReplicas }} / {{ node.replicas }}</p>
+          <p class="meta">Last action: {{ node.lastAction }}</p>
+          <p class="ai-summary">
+            <mat-icon>psychology</mat-icon>
+            AI Diagnosis: {{ node.aiDiagnosis ?? 'Awaiting inference from analyzer.' }}
+          </p>
+          <p class="meta">Confidence: {{ confidenceLabel(node.aiConfidence) }}</p>
+          <p class="meta">Last event: {{ node.lastEventAt | date : 'mediumTime' }}</p>
+        </article>
+      }
+    </div>
+  </mat-card-content>
+</mat-card>

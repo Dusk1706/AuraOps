@@ -1,0 +1,88 @@
+:host {
+  display: block;
+  min-height: 100vh;
+  background:
+    radial-gradient(1200px 500px at 90% -20%, rgba(14, 116, 144, 0.18), rgba(255, 255, 255, 0)),
+    radial-gradient(900px 500px at -10% 0%, rgba(2, 132, 199, 0.16), rgba(255, 255, 255, 0)),
+    #eef3fb;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  backdrop-filter: blur(6px);
+  background: rgba(15, 23, 42, 0.92);
+  color: #f8fafc;
+}
+
+.brand {
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.connection-pill {
+  margin-right: 12px;
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.connection-pill.connected {
+  background: #dcfce7;
+  color: #14532d;
+}
+
+.connection-pill.connecting {
+  background: #fef3c7;
+  color: #78350f;
+}
+
+.connection-pill.disconnected {
+  background: #fee2e2;
+  color: #7f1d1d;
+}
+
+.stale-banner {
+  margin: 0 auto;
+  max-width: 1280px;
+  background: #7f1d1d;
+  color: #fee2e2;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  margin-top: 10px;
+}
+
+.page {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 22px;
+  display: grid;
+  gap: 16px;
+}
+
+.page.stale {
+  opacity: 0.72;
+  transition: opacity 160ms ease-in-out;
+}
+
+.panel-grid {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 16px;
+  min-height: calc(100vh - 250px);
+}
+
+@media (max-width: 1080px) {
+  .panel-grid {
+    grid-template-columns: 1fr;
+  }
+}

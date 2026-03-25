@@ -1,0 +1,55 @@
+<section class="kpi-grid">
+  <mat-card appearance="outlined" class="kpi-card">
+    <mat-card-header>
+      <mat-card-title>Open incidents</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <p class="kpi-value">{{ kpis().openIncidents }}</p>
+      <svg class="sparkline" viewBox="0 0 220 40" preserveAspectRatio="none" aria-hidden="true">
+        <path [attr.d]="sparklinePath(kpis().openIncidentsTrend)"></path>
+      </svg>
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card appearance="outlined" class="kpi-card">
+    <mat-card-header>
+      <mat-card-title>Automation success</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <p class="kpi-value">{{ kpis().automationSuccess }}%</p>
+      <mat-progress-bar mode="determinate" [value]="kpis().automationSuccess"></mat-progress-bar>
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card appearance="outlined" class="kpi-card">
+    <mat-card-header>
+      <mat-card-title>p95 response time</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <p class="kpi-value">{{ kpis().p95ResponseMs }} ms</p>
+      <mat-progress-bar mode="determinate" [value]="progressForP95(kpis().p95ResponseMs)"></mat-progress-bar>
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card appearance="outlined" class="kpi-card">
+    <mat-card-header>
+      <mat-card-title>MTTR promedio</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <p class="kpi-value">{{ mttrDisplay(kpis().mttrSeconds) }}</p>
+      <p class="kpi-caption">Mean Time To Recovery</p>
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card appearance="outlined" class="kpi-card">
+    <mat-card-header>
+      <mat-card-title>Processed events</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <p class="kpi-value">{{ kpis().totalEvents }}</p>
+      <svg class="sparkline" viewBox="0 0 220 40" preserveAspectRatio="none" aria-hidden="true">
+        <path [attr.d]="sparklinePath(kpis().processedEventsTrend)"></path>
+      </svg>
+    </mat-card-content>
+  </mat-card>
+</section>
