@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.auraops.operator.application.HealingSafetyServiceTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-03-24T23:18:01.909Z" hostname="WORKER" time="0.149">
-  <properties/>
-  <testcase name="validate_rejectsIfMaxUnavailableExceedsQuarterOfPods()" classname="com.auraops.operator.application.HealingSafetyServiceTest" time="0.135"/>
-  <testcase name="validate_rejectsRecreateStrategy()" classname="com.auraops.operator.application.HealingSafetyServiceTest" time="0.001"/>
-  <testcase name="validate_acceptsConservativeRollingUpdate()" classname="com.auraops.operator.application.HealingSafetyServiceTest" time="0.002"/>
-  <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[]]></system-err>
-</testsuite>

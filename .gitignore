@@ -4,3 +4,15 @@ docs/
 # Gradle
 **/.gradle/
 **/build/
+
+# Node / Frontend
+**/node_modules/
+**/dist/
+**/coverage/
+**/.angular/
+**/out-tsc/
+
+# Logs and temp files
+*.log
+*.tmp
+*.temp

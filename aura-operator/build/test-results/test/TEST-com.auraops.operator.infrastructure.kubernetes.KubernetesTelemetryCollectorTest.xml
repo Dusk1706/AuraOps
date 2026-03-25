@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.auraops.operator.infrastructure.kubernetes.KubernetesTelemetryCollectorTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-03-24T23:18:05.732Z" hostname="WORKER" time="0.167">
-  <properties/>
-  <testcase name="collect_prefersExternalObservabilitySignalsWhenAvailable()" classname="com.auraops.operator.infrastructure.kubernetes.KubernetesTelemetryCollectorTest" time="0.166"/>
-  <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[]]></system-err>
-</testsuite>
