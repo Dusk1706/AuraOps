@@ -12,6 +12,7 @@ import com.auraops.operator.domain.HealingPhase;
 import com.auraops.operator.infrastructure.kubernetes.DeploymentActionExecutor;
 import com.auraops.operator.infrastructure.kubernetes.DeploymentReadinessVerifier;
 import com.auraops.operator.infrastructure.kubernetes.KubernetesTelemetryCollector;
+import com.auraops.operator.infrastructure.realtime.HealerEventPublisher;
 import io.fabric8.kubernetes.api.model.apps.Deployment;
 import io.fabric8.kubernetes.api.model.apps.ReplicaSet;
 import io.fabric8.kubernetes.client.KubernetesClient;
@@ -51,6 +52,7 @@ public class HealerPolicyReconciler implements Reconciler<HealerPolicy> {
     private final HealingRateLimiter healingRateLimiter;
     private final DeploymentActionExecutor actionExecutor;
     private final DeploymentReadinessVerifier readinessVerifier;
+    private final HealerEventPublisher healerEventPublisher;
 
     public HealerPolicyReconciler(
         KubernetesClient kubernetesClient,
@@ -60,7 +62,8 @@ public class HealerPolicyReconciler implements Reconciler<HealerPolicy> {
         HealingSafetyService healingSafetyService,
         HealingRateLimiter healingRateLimiter,
         DeploymentActionExecutor actionExecutor,
-        DeploymentReadinessVerifier readinessVerifier
+        DeploymentReadinessVerifier readinessVerifier,
+        HealerEventPublisher healerEventPublisher
     ) {
         this.kubernetesClient = Objects.requireNonNull(kubernetesClient);
         this.telemetryCollector = Objects.requireNonNull(telemetryCollector);
@@ -70,6 +73,7 @@ public class HealerPolicyReconciler implements Reconciler<HealerPolicy> {
         this.healingRateLimiter = Objects.requireNonNull(healingRateLimiter);
         this.actionExecutor = Objects.requireNonNull(actionExecutor);
         this.readinessVerifier = Objects.requireNonNull(readinessVerifier);
+        this.healerEventPublisher = Objects.requireNonNull(healerEventPublisher);
     }
 
     @Override
@@ -97,8 +101,8 @@ public class HealerPolicyReconciler implements Reconciler<HealerPolicy> {
 
     @Override
     public UpdateControl<HealerPolicy> reconcile(HealerPolicy resource, Context<HealerPolicy> context) {
-        String namespace = resource.getMetadata().getNamespace();
-        String targetName = resource.getSpec().getTargetDeployment();
+        String namespace = requireNamespace(resource);
+        String targetName = requireTargetDeployment(resource);
 
         Deployment deployment = kubernetesClient.apps().deployments()
             .inNamespace(namespace)
@@ -107,7 +111,7 @@ public class HealerPolicyReconciler implements Reconciler<HealerPolicy> {
 
         if (deployment == null) {
             updateStatus(resource, HealingPhase.WAITING_FOR_TARGET, null, 0.0,
-                "Target deployment %s was not found".formatted(targetName), null, null);
+                "Target deployment %s was not found".formatted(targetName), "NONE", null);
             return UpdateControl.patchStatus(resource);
         }
 
@@ -120,17 +124,17 @@ public class HealerPolicyReconciler implements Reconciler<HealerPolicy> {
         var incidentContext = telemetryCollector.collect(deployment);
         if (isTelemetryUnavailable(incidentContext.additionalMetrics())) {
             updateStatus(resource, HealingPhase.ANALYSIS_BLOCKED, null, 0.0,
-                telemetryUnavailableMessage(incidentContext.additionalMetrics()), null, null);
+                telemetryUnavailableMessage(incidentContext.additionalMetrics()), "NONE", null);
             return UpdateControl.patchStatus(resource);
         }
 
         AnalyzerDecision decision = analyzerClient.analyze(incidentContext);
         if (decision instanceof AnalyzerDecision.Failure failure) {
-            updateStatus(resource, HealingPhase.ANALYSIS_BLOCKED, null, 0.0, failure.message(), null, null);
+            updateStatus(resource, HealingPhase.ANALYSIS_BLOCKED, null, 0.0, failure.message(), "NONE", null);
             return UpdateControl.patchStatus(resource);
         }
         if (decision instanceof AnalyzerDecision.Inconclusive inconclusive) {
-            updateStatus(resource, HealingPhase.ANALYSIS_BLOCKED, null, 0.0, inconclusive.message(), null, null);
+            updateStatus(resource, HealingPhase.ANALYSIS_BLOCKED, null, 0.0, inconclusive.message(), "NONE", null);
             return UpdateControl.patchStatus(resource);
         }
 
@@ -138,21 +142,21 @@ public class HealerPolicyReconciler implements Reconciler<HealerPolicy> {
         AnalyzerDecision.Success success = (AnalyzerDecision.Success) decision;
         PolicyDecision policyDecision = policyDecisionService.evaluate(resource, deployment, success);
         if (policyDecision instanceof PolicyDecision.Reject reject) {
-            updateStatus(resource, HealingPhase.POLICY_BLOCKED, success.diagnosis(), success.confidence(), reject.reason(), null, null);
+            updateStatus(resource, HealingPhase.POLICY_BLOCKED, success.diagnosis(), success.confidence(), reject.reason(), "NONE", null);
             return UpdateControl.patchStatus(resource);
         }
 
         PolicyDecision.Execute executableDecision = (PolicyDecision.Execute) policyDecision;
         PolicyDecision safetyDecision = healingSafetyService.validate(executableDecision.actionPlan(), deployment);
         if (safetyDecision instanceof PolicyDecision.Reject reject) {
-            updateStatus(resource, HealingPhase.POLICY_BLOCKED, success.diagnosis(), success.confidence(), reject.reason(), null, null);
+            updateStatus(resource, HealingPhase.POLICY_BLOCKED, success.diagnosis(), success.confidence(), reject.reason(), "NONE", null);
             return UpdateControl.patchStatus(resource);
         }
 
         // 4. Rate Limiting
         if (!healingRateLimiter.tryAcquire()) {
             updateStatus(resource, HealingPhase.RATE_LIMITED, success.diagnosis(), success.confidence(),
-                "Healing rate limiter rejected the action to avoid alert storms", null, null);
+                "Healing rate limiter rejected the action to avoid alert storms", "NONE", null);
             return UpdateControl.patchStatus(resource);
         }
 
@@ -229,10 +233,60 @@ public class HealerPolicyReconciler implements Reconciler<HealerPolicy> {
         status.setHealthScore(healthScore);
         status.setMessage(message);
         status.setLastAction(lastAction);
-        status.setObservedDeployment(resource.getSpec().getTargetDeployment());
+        status.setObservedDeployment(requireTargetDeployment(resource));
         status.setExpectedGeneration(expectedGeneration);
         status.setTimestamp(OffsetDateTime.now());
         resource.setStatus(status);
+
+        var namespace = requireNamespace(resource);
+        var policyName = requirePolicyName(resource);
+        var action = requireNonBlank(lastAction, "status.lastAction");
+        var eventType = switch (phase) {
+            case VERIFYING -> "RECONCILIATION_STARTED";
+            case HEALED -> "RECONCILIATION_COMPLETED";
+            case ANALYSIS_BLOCKED, POLICY_BLOCKED, RATE_LIMITED -> "RECONCILIATION_FAILED";
+            default -> "POLICY_APPLIED";
+        };
+
+        healerEventPublisher.publish(
+            eventType,
+            policyName,
+            action,
+            phase.name(),
+            requireTargetDeployment(resource),
+            namespace,
+            message,
+            diagnosis,
+            healthScore
+        );
+    }
+
+    private String requireNamespace(HealerPolicy resource) {
+        if (resource.getMetadata() == null) {
+            throw new IllegalStateException("HealerPolicy.metadata is required");
+        }
+        return requireNonBlank(resource.getMetadata().getNamespace(), "HealerPolicy.metadata.namespace");
+    }
+
+    private String requirePolicyName(HealerPolicy resource) {
+        if (resource.getMetadata() == null) {
+            throw new IllegalStateException("HealerPolicy.metadata is required");
+        }
+        return requireNonBlank(resource.getMetadata().getName(), "HealerPolicy.metadata.name");
+    }
+
+    private String requireTargetDeployment(HealerPolicy resource) {
+        if (resource.getSpec() == null) {
+            throw new IllegalStateException("HealerPolicy.spec is required");
+        }
+        return requireNonBlank(resource.getSpec().getTargetDeployment(), "HealerPolicy.spec.targetDeployment");
+    }
+
+    private String requireNonBlank(String value, String fieldName) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalStateException(fieldName + " is required");
+        }
+        return value;
     }
 
     private boolean isTelemetryUnavailable(Map<String, Object> additionalMetrics) {

@@ -1,4 +1,19 @@
 services:
+  aura-dashboard:
+    build:
+      context: ./aura-dashboard
+      dockerfile: Dockerfile
+    ports:
+      - "4200:4000"
+    environment:
+      PORT: 4000
+      AURAOPS_OPERATOR_WS_BASE_URL: http://aura-operator:8080
+    depends_on:
+      - aura-api-analyzer
+      - aura-operator
+    networks:
+      - aura-network
+
   aura-api-analyzer:
     build:
       context: ./aura-api-analyzer
@@ -30,7 +45,7 @@ services:
       AURAOPS_OBSERVABILITY_TEMPO_BASE_URL: http://tempo:3200
       KUBECONFIG: /home/spring/.kube/config
     volumes:
-      - ${USERPROFILE}/.kube/config:/home/spring/.kube/config:ro
+      - ${USERPROFILE}/.kube:/home/spring/.kube:ro
     depends_on:
       - aura-api-analyzer
       - loki
@@ -58,7 +73,7 @@ services:
       - "4318:4318"
     volumes:
       - ./infra/observability/tempo/tempo-config.yaml:/etc/tempo/tempo-config.yaml:ro
-      - tempo-data:/tmp/tempo
+      - tempo-data:/var/tempo
     networks:
       - aura-network
 

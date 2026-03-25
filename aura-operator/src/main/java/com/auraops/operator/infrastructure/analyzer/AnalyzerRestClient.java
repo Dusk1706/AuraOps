@@ -6,6 +6,7 @@ import com.auraops.operator.application.IncidentContext;
 import com.auraops.operator.config.AnalyzerClientProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.stereotype.Component;
@@ -26,6 +27,7 @@ public class AnalyzerRestClient implements AnalyzerClient {
     private final ObjectMapper objectMapper;
 
     public AnalyzerRestClient(
+        @Qualifier("analyzerApiRestClient")
         RestClient analyzerRestClient,
         AnalyzerClientProperties properties,
         CircuitBreakerRegistry circuitBreakerRegistry,
@@ -64,13 +66,23 @@ public class AnalyzerRestClient implements AnalyzerClient {
             }
             return new AnalyzerDecision.Failure(errorCode, message);
         } catch (RestClientException ex) {
-            return new AnalyzerDecision.Failure("ANALYZER_UNAVAILABLE", ex.getMessage());
+            return new AnalyzerDecision.Failure("ANALYZER_UNAVAILABLE", describeClientError(properties.getBaseUrl(), ex));
         } catch (Exception ex) {
             return new AnalyzerDecision.Failure(
                 "ANALYZER_FAILURE",
                 ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage()
             );
         }
+    }
+
+    private String describeClientError(String baseUrl, Exception ex) {
+        Throwable root = ex;
+        while (root.getCause() != null) {
+            root = root.getCause();
+        }
+        String message = root.getMessage();
+        return "Analyzer request failed (baseUrl=" + baseUrl + ") cause=" + root.getClass().getSimpleName()
+            + (message == null || message.isBlank() ? "" : ": " + message);
     }
 
     private AnalyzerRequest toRequest(IncidentContext incidentContext) {

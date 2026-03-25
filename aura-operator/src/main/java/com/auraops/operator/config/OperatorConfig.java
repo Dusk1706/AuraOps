@@ -14,7 +14,8 @@ import java.net.http.HttpClient;
 public class OperatorConfig {
 
     @Bean
-    RestClient analyzerRestClient(RestClient.Builder builder, AnalyzerClientProperties properties) {
+    @Qualifier("analyzerApiRestClient")
+    RestClient analyzerApiRestClient(RestClient.Builder builder, AnalyzerClientProperties properties) {
         JdkClientHttpRequestFactory requestFactory = requestFactory(properties.getConnectTimeout(), properties.getReadTimeout());
         return builder
             .baseUrl(properties.getBaseUrl())

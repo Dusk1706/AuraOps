@@ -56,10 +56,20 @@ public class TempoTraceCollector {
                 .body(String.class);
             return Result.available(parse(body, properties.getTempo().getLimit()));
         } catch (RestClientException ex) {
-            return Result.unavailable("TEMPO_UNAVAILABLE", ex.getClass().getSimpleName() + ": " + ex.getMessage());
+            return Result.unavailable("TEMPO_UNAVAILABLE", describeClientError(properties.getTempo().getBaseUrl(), ex));
         } catch (RuntimeException ex) {
             return Result.unavailable("TEMPO_PARSE_ERROR", "Failed to parse Tempo response: " + ex.getMessage());
         }
+    }
+
+    private String describeClientError(String baseUrl, Exception ex) {
+        Throwable root = ex;
+        while (root.getCause() != null) {
+            root = root.getCause();
+        }
+        String message = root.getMessage();
+        return "Tempo request failed (baseUrl=" + baseUrl + ") cause=" + root.getClass().getSimpleName()
+            + (message == null || message.isBlank() ? "" : ": " + message);
     }
 
     private List<String> parse(String body, int limit) {

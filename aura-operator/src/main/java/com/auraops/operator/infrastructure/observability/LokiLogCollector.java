@@ -62,10 +62,20 @@ public class LokiLogCollector {
                 .body(String.class);
             return Result.available(parse(body, maxLines));
         } catch (RestClientException ex) {
-            return Result.unavailable("LOKI_UNAVAILABLE", ex.getClass().getSimpleName() + ": " + ex.getMessage());
+            return Result.unavailable("LOKI_UNAVAILABLE", describeClientError(properties.getLoki().getBaseUrl(), ex));
         } catch (RuntimeException ex) {
             return Result.unavailable("LOKI_PARSE_ERROR", "Failed to parse Loki response: " + ex.getMessage());
         }
+    }
+
+    private String describeClientError(String baseUrl, Exception ex) {
+        Throwable root = ex;
+        while (root.getCause() != null) {
+            root = root.getCause();
+        }
+        String message = root.getMessage();
+        return "Loki request failed (baseUrl=" + baseUrl + ") cause=" + root.getClass().getSimpleName()
+            + (message == null || message.isBlank() ? "" : ": " + message);
     }
 
     private List<String> parse(String body, int maxLines) {

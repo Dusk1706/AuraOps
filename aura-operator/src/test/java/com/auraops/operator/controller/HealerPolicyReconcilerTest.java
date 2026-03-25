@@ -16,6 +16,7 @@ import com.auraops.operator.domain.HealingPhase;
 import com.auraops.operator.infrastructure.kubernetes.DeploymentActionExecutor;
 import com.auraops.operator.infrastructure.kubernetes.DeploymentReadinessVerifier;
 import com.auraops.operator.infrastructure.kubernetes.KubernetesTelemetryCollector;
+import com.auraops.operator.infrastructure.realtime.HealerEventPublisher;
 import io.fabric8.kubernetes.api.model.ObjectMetaBuilder;
 import io.fabric8.kubernetes.api.model.apps.DeploymentList;
 import io.fabric8.kubernetes.api.model.apps.Deployment;
@@ -52,6 +53,7 @@ class HealerPolicyReconcilerTest {
     private HealingRateLimiter healingRateLimiter;
     private DeploymentActionExecutor actionExecutor;
     private DeploymentReadinessVerifier readinessVerifier;
+    private HealerEventPublisher healerEventPublisher;
     private HealerPolicyReconciler reconciler;
 
     @SuppressWarnings("unchecked")
@@ -65,6 +67,7 @@ class HealerPolicyReconcilerTest {
         healingRateLimiter = mock(HealingRateLimiter.class);
         actionExecutor = mock(DeploymentActionExecutor.class);
         readinessVerifier = mock(DeploymentReadinessVerifier.class);
+        healerEventPublisher = mock(HealerEventPublisher.class);
 
         reconciler = new HealerPolicyReconciler(
             kubernetesClient,
@@ -74,7 +77,8 @@ class HealerPolicyReconcilerTest {
             healingSafetyService,
             healingRateLimiter,
             actionExecutor,
-            readinessVerifier
+            readinessVerifier,
+            healerEventPublisher
         );
     }
 
@@ -105,6 +109,17 @@ class HealerPolicyReconcilerTest {
         assertThat(policy.getStatus().getPhase()).isEqualTo("VERIFYING");
         assertThat(policy.getStatus().getExpectedGeneration()).isEqualTo(2L);
         verify(actionExecutor).execute(deployment, actionPlan);
+        verify(healerEventPublisher).publish(
+            eq("RECONCILIATION_STARTED"),
+            eq("payments-auto-heal"),
+            eq("ROLLING_RESTART"),
+            eq("VERIFYING"),
+            eq("payments-api"),
+            eq("payments"),
+            any(),
+            eq("Heap growth detected"),
+            eq(0.99)
+        );
     }
 
     @Test
@@ -114,6 +129,7 @@ class HealerPolicyReconcilerTest {
         status.setPhase(HealingPhase.VERIFYING.name());
         status.setExpectedGeneration(2L);
         status.setAiDiagnosis("Memory leak");
+        status.setLastAction("ROLLING_RESTART");
         policy.setStatus(status);
 
         Deployment deployment = deployment(2L);
@@ -128,6 +144,17 @@ class HealerPolicyReconcilerTest {
         assertThat(result.getScheduleDelay()).isEmpty();
         assertThat(policy.getStatus().getPhase()).isEqualTo("HEALED");
         assertThat(policy.getStatus().getMessage()).isEqualTo("Deployment is ready");
+        verify(healerEventPublisher).publish(
+            eq("RECONCILIATION_COMPLETED"),
+            eq("payments-auto-heal"),
+            eq("ROLLING_RESTART"),
+            eq("HEALED"),
+            eq("payments-api"),
+            eq("payments"),
+            eq("Deployment is ready"),
+            eq("Memory leak"),
+            any()
+        );
     }
 
     @Test
@@ -136,6 +163,7 @@ class HealerPolicyReconcilerTest {
         HealerPolicyStatus status = new HealerPolicyStatus();
         status.setPhase(HealingPhase.VERIFYING.name());
         status.setExpectedGeneration(2L);
+        status.setLastAction("ROLLING_RESTART");
         policy.setStatus(status);
 
         Deployment deployment = deployment(2L);

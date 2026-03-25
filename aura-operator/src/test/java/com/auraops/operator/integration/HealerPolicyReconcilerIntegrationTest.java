@@ -16,6 +16,7 @@ import com.auraops.operator.infrastructure.kubernetes.DeploymentReadinessVerifie
 import com.auraops.operator.infrastructure.kubernetes.KubernetesTelemetryCollector;
 import com.auraops.operator.infrastructure.observability.LokiLogCollector;
 import com.auraops.operator.infrastructure.observability.TempoTraceCollector;
+import com.auraops.operator.infrastructure.realtime.HealerEventPublisher;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.fabric8.kubernetes.api.model.IntOrString;
 import io.fabric8.kubernetes.api.model.NamespaceBuilder;
@@ -133,7 +134,8 @@ class HealerPolicyReconcilerIntegrationTest {
             new HealingSafetyService(healerProperties),
             new HealingRateLimiter(RateLimiterRegistry.ofDefaults()),
             new DeploymentActionExecutor(client),
-            readinessVerifier
+            readinessVerifier,
+            mock(HealerEventPublisher.class)
         );
 
         HealerPolicy policy = healerPolicy();

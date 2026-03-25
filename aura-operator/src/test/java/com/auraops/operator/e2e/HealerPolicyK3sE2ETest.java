@@ -16,6 +16,7 @@ import com.auraops.operator.infrastructure.kubernetes.DeploymentReadinessVerifie
 import com.auraops.operator.infrastructure.kubernetes.KubernetesTelemetryCollector;
 import com.auraops.operator.infrastructure.observability.LokiLogCollector;
 import com.auraops.operator.infrastructure.observability.TempoTraceCollector;
+import com.auraops.operator.infrastructure.realtime.HealerEventPublisher;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
@@ -122,7 +123,8 @@ class HealerPolicyK3sE2ETest {
             new HealingSafetyService(healerProperties),
             new HealingRateLimiter(RateLimiterRegistry.ofDefaults()),
             new DeploymentActionExecutor(kubernetesClient),
-            new DeploymentReadinessVerifier(kubernetesClient)
+            new DeploymentReadinessVerifier(kubernetesClient),
+            mock(HealerEventPublisher.class)
         );
 
         HealerPolicy policy = scaleOutPolicy(namespace, deploymentName);
