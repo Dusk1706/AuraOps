@@ -18,10 +18,10 @@
 - Modify: `aura-dashboard/src/app/app.routes.ts`
 - Modify: `aura-dashboard/src/app/app.component.html`
 
-- [ ] **Step 1: Create MainLayout component with Sidebar and TopBar**
-- [ ] **Step 2: Update routes to use MainLayout as a wrapper**
-- [ ] **Step 3: Implement responsive Sidebar (Collapsible)**
-- [ ] **Step 4: Verify navigation works between placeholder routes**
+- [x] **Step 1: Create MainLayout component with Sidebar and TopBar**
+- [x] **Step 2: Update routes to use MainLayout as a wrapper**
+- [x] **Step 3: Implement responsive Sidebar (Collapsible)**
+- [x] **Step 4: Verify navigation works between placeholder routes**
 - [ ] **Step 5: Commit**
 
 ### Task 2: Screen 1 – Overview & Hexagon Grid
@@ -31,10 +31,10 @@
 - Create: `aura-dashboard/src/app/shared/components/hexagon-node/hexagon-node.component.ts`
 - Modify: `aura-dashboard/src/app/core/realtime/dashboard-store.service.ts`
 
-- [ ] **Step 1: Implement SVG HexagonNode component with Signal-based states (Healthy, Healing, Critical)**
-- [ ] **Step 2: Create Overview page with KPI Strip and Hexagon Grid grouped by Namespace**
-- [ ] **Step 3: Connect Hexagon Grid to `DashboardStoreService.nodes()` signal**
-- [ ] **Step 4: Add "Clean Activity Feed" (one-line summaries)**
+- [x] **Step 1: Implement SVG HexagonNode component with Signal-based states (Healthy, Healing, Critical)**
+- [x] **Step 2: Create Overview page with KPI Strip and Hexagon Grid grouped by Namespace**
+- [x] **Step 3: Connect Hexagon Grid to `DashboardStoreService.nodes()` signal**
+- [x] **Step 4: Add "Clean Activity Feed" (one-line summaries)**
 - [ ] **Step 5: Commit**
 
 ### Task 3: Screen 2 – Incidents & AI Diagnostics
@@ -43,10 +43,10 @@
 - Create: `aura-dashboard/src/app/features/incidents/pages/incident-detail/incident-detail.component.ts`
 - Create: `aura-dashboard/src/app/features/incidents/components/dependency-graph/dependency-graph.component.ts`
 
-- [ ] **Step 1: Implement Dependency Graph (Approach A: SVG-based with basic link logic)**
-- [ ] **Step 2: Create AI Diagnostic Card with confidence gauge and reasoning list**
-- [ ] **Step 3: Implement Manual Action buttons (Acknowledge, Rollback)**
-- [ ] **Step 4: Verify deep-linking from Screen 1 works**
+- [x] **Step 1: Implement Dependency Graph (Approach A: SVG-based with basic link logic)**
+- [x] **Step 2: Create AI Diagnostic Card with confidence gauge and reasoning list**
+- [x] **Step 3: Implement Manual Action buttons (Acknowledge, Rollback)**
+- [x] **Step 4: Verify deep-linking from Screen 1 works**
 - [ ] **Step 5: Commit**
 
 ### Task 4: Screen 3 – Live Telemetry (The Engine Room)
@@ -55,9 +55,9 @@
 - Create: `aura-dashboard/src/app/features/telemetry/pages/logs/logs.component.ts`
 - Modify: `aura-dashboard/src/app/core/realtime/dashboard-realtime.service.ts`
 
-- [ ] **Step 1: Create high-performance Log Console with Monospace font**
-- [ ] **Step 2: Implement Filters (Severity, Namespace, Pod) and Live Tail toggle**
-- [ ] **Step 3: Add expandable JSON blocks with syntax highlighting**
+- [x] **Step 1: Create high-performance Log Console with Monospace font**
+- [x] **Step 2: Implement Filters (Severity, Namespace, Pod) and Live Tail toggle**
+- [x] **Step 3: Add expandable JSON blocks with syntax highlighting**
 - [ ] **Step 4: Commit**
 
 ### Task 5: Screen 4 & RBAC Security UX
@@ -66,8 +66,8 @@
 - Create: `aura-dashboard/src/app/core/services/rbac.service.ts`
 - Create: `aura-dashboard/src/app/features/settings/pages/settings/settings.component.ts`
 
-- [ ] **Step 1: Implement RBAC Signal-based service (`isAdmin()`, `isReadOnly()`)**
-- [ ] **Step 2: Create Settings view for Vault/Istio/HealerPolicy status**
-- [ ] **Step 3: Add "Read-Only" UI dimming and padlock icons globally**
-- [ ] **Step 4: Final verification of responsiveness and performance**
+- [x] **Step 1: Implement RBAC Signal-based service (`isAdmin()`, `isReadOnly()`)**
+- [x] **Step 2: Create Settings view for Vault/Istio/HealerPolicy status**
+- [x] **Step 3: Add "Read-Only" UI dimming and padlock icons globally**
+- [x] **Step 4: Final verification of responsiveness and performance**
 - [ ] **Step 5: Commit**

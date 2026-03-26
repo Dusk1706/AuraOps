@@ -5,10 +5,11 @@ import {
   DASHBOARD_REALTIME_CONFIG,
   DashboardRealtimeConfig,
 } from '../config/dashboard-realtime.config';
-import { HealerEventWire } from '../models/healer-event.model';
+import { HealerEvent, HealerEventWire } from '../models/healer-event.model';
 import { mapWireEvent } from './event-mapper';
 import { DashboardStoreService } from './dashboard-store.service';
 import { NotificationService } from '../services/notification.service';
+import { Subject } from 'rxjs';
 
 @Injectable({ providedIn: 'root' })
 export class DashboardRealtimeService {
@@ -20,6 +21,9 @@ export class DashboardRealtimeService {
 
   private client?: Client;
   private started = false;
+  
+  private readonly rawLogsSubject = new Subject<any>();
+  readonly rawLogs$ = this.rawLogsSubject.asObservable();
 
   start(): void {
     if (this.started) {
@@ -102,10 +106,48 @@ export class DashboardRealtimeService {
       return;
     }
     try {
-      this.store.ingestEvent(mapWireEvent(payload));
+      const mappedEvent = mapWireEvent(payload);
+      this.store.ingestEvent(mappedEvent);
+      this.rawLogsSubject.next(this.toRawLog(mappedEvent));
     } catch (error) {
       this.notifications.error('Received malformed healer event. Data might be out of sync.');
       console.error('Received invalid healer event payload', error, payload);
+    }
+  }
+
+  private toRawLog(event: HealerEvent): {
+    timestamp: Date;
+    severity: 'INFO' | 'WARN' | 'ERROR' | 'DEBUG';
+    namespace: string;
+    pod: string;
+    message: string;
+    jsonPayload: Record<string, unknown>;
+  } {
+    return {
+      timestamp: new Date(event.timestamp),
+      severity: this.toLogSeverity(event.severity),
+      namespace: event.namespace,
+      pod: event.serviceName,
+      message: `${event.eventType}: ${event.action}`,
+      jsonPayload: {
+        policy: event.policy,
+        details: event.details,
+        aiDiagnosis: event.aiDiagnosis,
+        aiConfidence: event.aiConfidence,
+      },
+    };
+  }
+
+  private toLogSeverity(severity: HealerEvent['severity']): 'INFO' | 'WARN' | 'ERROR' | 'DEBUG' {
+    switch (severity) {
+      case 'CRITICAL':
+        return 'ERROR';
+      case 'HIGH':
+        return 'WARN';
+      case 'MEDIUM':
+      case 'LOW':
+      default:
+        return 'INFO';
     }
   }
 

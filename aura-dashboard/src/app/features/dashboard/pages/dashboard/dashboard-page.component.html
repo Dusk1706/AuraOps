@@ -1,12 +1,3 @@
-<mat-toolbar class="topbar">
-  <span class="brand">AuraOps Command Center</span>
-  <span class="spacer"></span>
-  <span class="connection-pill" [ngClass]="connectionClass()">{{ store.connectionLabel() }}</span>
-  <button mat-icon-button aria-label="Refresh dashboard" (click)="refreshRealtime()">
-    <mat-icon>sync</mat-icon>
-  </button>
-</mat-toolbar>
-
 @if (showStaleBanner()) {
   <section class="stale-banner">
     Realtime stream disconnected. Values shown are stale until WebSocket reconnects.
