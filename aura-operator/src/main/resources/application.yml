@@ -1,3 +1,6 @@
+server:
+  port: ${SERVER_PORT:8081}
+
 spring:
   application:
     name: aura-operator
@@ -25,7 +28,7 @@ logging:
 
 auraops:
   websocket:
-    allowed-origin-patterns: http://localhost:4200
+    allowed-origin-patterns: "*"
   analyzer:
     base-url: ${AURAOPS_ANALYZER_BASE_URL:http://localhost:8080}
     analyze-path: /api/v1/analyze
@@ -48,10 +51,16 @@ auraops:
       read-timeout: 5s
     tempo:
       enabled: ${AURAOPS_OBSERVABILITY_TEMPO_ENABLED:false}
-      base-url: ${AURAOPS_OBSERVABILITY_TEMPO_BASE_URL:http://localhost:3200}
+      base-url: ${AURAOPS_OBSERVABILITY_TEMPO_BASE_URL:http://tempo:3200}
       search-path: /api/search
       lookback: 5m
       limit: 5
+      connect-timeout: 2s
+      read-timeout: 5s
+    prometheus:
+      enabled: ${AURAOPS_OBSERVABILITY_PROMETHEUS_ENABLED:true}
+      base-url: ${AURAOPS_OBSERVABILITY_PROMETHEUS_BASE_URL:http://prometheus:9090}
+      query-path: /api/v1/query
       connect-timeout: 2s
       read-timeout: 5s
 

@@ -1,15 +1,22 @@
-import { Component, input } from '@angular/core';
+import { Component, input, inject } from '@angular/core';
 import { DatePipe, NgClass } from '@angular/common';
+import { HttpClient } from '@angular/common/http';
 import { MatCardModule } from '@angular/material/card';
+import { MatButtonModule } from '@angular/material/button';
+import { MatIconModule } from '@angular/material/icon';
 import { HealerEvent } from '../../../../core/models/healer-event.model';
+import { NotificationService } from '../../../../core/services/notification.service';
+import { firstValueFrom } from 'rxjs';
 
 @Component({
   selector: 'app-event-feed',
-  imports: [NgClass, DatePipe, MatCardModule],
+  imports: [NgClass, DatePipe, MatCardModule, MatButtonModule, MatIconModule],
   templateUrl: './event-feed.component.html',
   styleUrl: './event-feed.component.scss',
 })
 export class EventFeedComponent {
+  private readonly http = inject(HttpClient);
+  private readonly notifications = inject(NotificationService);
   readonly events = input.required<HealerEvent[]>();
 
   eventIcon(eventType: HealerEvent['eventType']): string {
@@ -29,7 +36,25 @@ export class EventFeedComponent {
     }
   }
 
+  isPendingApproval(event: HealerEvent): boolean {
+    return event.eventType === 'POLICY_APPLIED' && (event.details?.includes('manual approval') ?? false);
+  }
+
+  async approveAction(event: HealerEvent): Promise<void> {
+    try {
+      await firstValueFrom(this.http.post(`/api/approvals/${event.namespace}/${event.policy}/approve`, {}));
+      this.notifications.success(`Action ${event.action} approved for ${event.serviceName}.`);
+    } catch (error) {
+      this.notifications.error('Failed to approve healing action.');
+      console.error('Approval failed', error);
+    }
+  }
+
   eventNarrative(event: HealerEvent): string {
+    if (this.isPendingApproval(event)) {
+      return `CRITICAL: Action ${event.action} on ${event.serviceName} requires manual approval before execution.`;
+    }
+
     switch (event.eventType) {
       case 'RECONCILIATION_STARTED':
         return `Analyzer evaluating telemetry for ${event.serviceName}.`;

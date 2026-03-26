@@ -9,8 +9,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -24,10 +22,9 @@ public class LokiLogCollector {
     private final ObjectMapper objectMapper;
 
     public LokiLogCollector(
-        @Qualifier("lokiRestClient") RestClient restClient,
-        ObservabilityProperties properties,
-        ObjectMapper objectMapper
-    ) {
+            @Qualifier("lokiRestClient") RestClient restClient,
+            ObservabilityProperties properties,
+            ObjectMapper objectMapper) {
         this.restClient = Objects.requireNonNull(restClient);
         this.properties = Objects.requireNonNull(properties);
         this.objectMapper = Objects.requireNonNull(objectMapper);
@@ -44,22 +41,30 @@ public class LokiLogCollector {
 
         String namespace = deployment.getMetadata().getNamespace();
         String deploymentName = deployment.getMetadata().getName();
-        String query = "{namespace=\"" + namespace + "\", " + properties.getLoki().getLabelName() + "=\"" + deploymentName + "\"}";
+
+        String query = "{namespace=\"" + namespace + "\", "
+                + properties.getLoki().getLabelName() + "=\"" + deploymentName + "\"}";
+
         Instant end = Instant.now();
         Instant start = end.minus(properties.getLoki().getLookback());
 
         try {
-            String encodedQuery = URLEncoder.encode(query, StandardCharsets.UTF_8);
-            String uri = properties.getLoki().getQueryRangePath()
-                + "?query=" + encodedQuery
-                + "&limit=" + maxLines
-                + "&direction=backward"
-                + "&start=" + (start.toEpochMilli() * 1_000_000L)
-                + "&end=" + (end.toEpochMilli() * 1_000_000L);
+            java.net.URI uri = org.springframework.web.util.UriComponentsBuilder
+                    .fromHttpUrl(properties.getLoki().getBaseUrl() + properties.getLoki().getQueryRangePath())
+                    .queryParam("query", query)
+                    .queryParam("limit", maxLines)
+                    .queryParam("direction", "backward")
+                    .queryParam("start", start.toEpochMilli() * 1_000_000L)
+                    .queryParam("end", end.toEpochMilli() * 1_000_000L)
+                    .build()
+                    .encode()
+                    .toUri();
+
             String body = restClient.get()
-                .uri(uri)
-                .retrieve()
-                .body(String.class);
+                    .uri(uri)
+                    .retrieve()
+                    .body(String.class);
+
             return Result.available(parse(body, maxLines));
         } catch (RestClientException ex) {
             return Result.unavailable("LOKI_UNAVAILABLE", describeClientError(properties.getLoki().getBaseUrl(), ex));
@@ -75,7 +80,7 @@ public class LokiLogCollector {
         }
         String message = root.getMessage();
         return "Loki request failed (baseUrl=" + baseUrl + ") cause=" + root.getClass().getSimpleName()
-            + (message == null || message.isBlank() ? "" : ": " + message);
+                + (message == null || message.isBlank() ? "" : ": " + message);
     }
 
     private List<String> parse(String body, int maxLines) {

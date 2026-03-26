@@ -47,24 +47,34 @@ public class SpringAIAdapter implements LLMProvider {
     }
 
     @Override
-    public AnalysisResult analyze(Incident incident) {
+    public AnalysisResult analyze(Incident incident, List<String> historicalContext) {
         try {
             String redactedLogs = truncateAndRedact(incident.telemetry().logs());
+            String history = historicalContext.isEmpty() 
+                ? "No similar past incidents found in memory." 
+                : String.join("\n\n---\n\n", historicalContext);
             
             String promptText = """
                 Analyze this Kubernetes incident and provide a deterministic Root Cause Analysis (RCA).
                 
+                HISTORICAL CONTEXT (Similar past incidents and their resolutions):
+                {history}
+                
+                CURRENT INCIDENT:
                 Incident ID: {incidentId}
                 Resource: {resource}
                 Telemetry Logs:
                 {logs}
                 
-                Use SUCCESS only when you can recommend a deterministic remediation action.
-                Use INCONCLUSIVE when the evidence is insufficient and explain what data is missing.
+                INSTRUCTIONS:
+                1. Review the historical context for patterns or resolutions that may apply here.
+                2. Use SUCCESS only when you can recommend a deterministic remediation action.
+                3. Use INCONCLUSIVE when the evidence is insufficient and explain what data is missing.
                 """;
             
             PromptTemplate template = new PromptTemplate(promptText);
             Prompt prompt = template.create(Map.of(
+                "history", history,
                 "incidentId", incident.incidentId(),
                 "resource", incident.resource().kind() + "/" + incident.resource().name(),
                 "logs", redactedLogs

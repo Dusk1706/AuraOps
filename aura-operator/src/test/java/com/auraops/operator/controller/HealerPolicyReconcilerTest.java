@@ -228,6 +228,63 @@ class HealerPolicyReconcilerTest {
         verify(actionExecutor, never()).execute(any(), any());
     }
 
+    @Test
+    void reconcile_transitionsToPendingApprovalWhenRequired() {
+        HealerPolicy policy = policy();
+        policy.getSpec().setApprovalRequired(true);
+        Deployment deployment = deployment(1L);
+        IncidentContext incidentContext = new IncidentContext("id", "payments", "payments-api", List.of("oom"), List.of(), "unknown", "unknown", 3, Map.of());
+        AnalyzerDecision.Success success = new AnalyzerDecision.Success("Heap growth detected", 0.99, "ROLLING_RESTART", Map.of(), "restart");
+        ActionPlan actionPlan = new ActionPlan(com.auraops.operator.domain.HealingActionType.ROLLING_RESTART, 4, 4, false, "Heap growth detected", 0.99, "restart");
+
+        setupDeploymentMock("payments", "payments-api", deployment);
+        when(telemetryCollector.collect(deployment)).thenReturn(incidentContext);
+        when(analyzerClient.analyze(incidentContext)).thenReturn(success);
+        when(policyDecisionService.evaluate(policy, deployment, success)).thenReturn(new PolicyDecision.Execute(actionPlan));
+        when(healingSafetyService.validate(actionPlan, deployment)).thenReturn(new PolicyDecision.Execute(actionPlan));
+
+        var result = reconciler.reconcile(policy, mock(Context.class));
+
+        assertThat(result.isPatchStatus()).isTrue();
+        assertThat(policy.getStatus().getPhase()).isEqualTo("PENDING_APPROVAL");
+        assertThat(policy.getStatus().getMessage()).contains("manual approval");
+        verify(actionExecutor, never()).execute(any(), any());
+    }
+
+    @Test
+    void reconcile_proceedsWhenApproved() {
+        HealerPolicy policy = policy();
+        policy.getSpec().setApprovalRequired(true);
+        HealerPolicyStatus status = new HealerPolicyStatus();
+        status.setPhase(HealingPhase.PENDING_APPROVAL.name());
+        status.setApproved(true);
+        status.setAiDiagnosis("Memory leak");
+        status.setLastAction("ROLLING_RESTART");
+        policy.setStatus(status);
+
+        Deployment deployment = deployment(1L);
+        IncidentContext incidentContext = new IncidentContext("id", "payments", "payments-api", List.of("oom"), List.of(), "unknown", "unknown", 3, Map.of());
+        AnalyzerDecision.Success success = new AnalyzerDecision.Success("Heap growth detected", 0.99, "ROLLING_RESTART", Map.of(), "restart");
+        ActionPlan actionPlan = new ActionPlan(com.auraops.operator.domain.HealingActionType.ROLLING_RESTART, 4, 4, false, "Heap growth detected", 0.99, "restart");
+
+        setupDeploymentMock("payments", "payments-api", deployment);
+        when(telemetryCollector.collect(deployment)).thenReturn(incidentContext);
+        when(analyzerClient.analyze(incidentContext)).thenReturn(success);
+        when(policyDecisionService.evaluate(policy, deployment, success)).thenReturn(new PolicyDecision.Execute(actionPlan));
+        when(healingSafetyService.validate(actionPlan, deployment)).thenReturn(new PolicyDecision.Execute(actionPlan));
+        when(healingRateLimiter.tryAcquire()).thenReturn(true);
+
+        Deployment refreshedDeployment = deployment(2L);
+        when(kubernetesClient.apps().deployments().inNamespace("payments").withName("payments-api").get())
+            .thenReturn(deployment, refreshedDeployment);
+
+        var result = reconciler.reconcile(policy, mock(Context.class));
+
+        assertThat(policy.getStatus().getPhase()).isEqualTo("VERIFYING");
+        assertThat(policy.getStatus().isApproved()).isFalse(); // Should be reset after execution
+        verify(actionExecutor).execute(deployment, actionPlan);
+    }
+
     @SuppressWarnings("unchecked")
     private void setupDeploymentMock(String namespace, String name, Deployment deployment) {
         MixedOperation<Deployment, DeploymentList, RollableScalableResource<Deployment>> deployments = mock(MixedOperation.class);

@@ -10,6 +10,12 @@ public record HealerEventMessage(
     String namespace,
     String details,
     String ai_diagnosis,
-    Double ai_confidence
+    Double ai_confidence,
+    Metrics metrics
 ) {
+    public record Metrics(
+        Double p95_response_ms,
+        Integer open_incidents,
+        Double automation_success_ratio
+    ) {}
 }

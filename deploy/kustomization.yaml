@@ -4,5 +4,3 @@ resources:
   - bases/operator
   - bases/analyzer
   - ../infra/security/vault
-  - ../infra/security/istio
-  - ../infra/security/kiali

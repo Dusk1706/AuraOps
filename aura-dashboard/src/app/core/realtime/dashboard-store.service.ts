@@ -1,57 +1,21 @@
-import { Injectable, computed, signal } from '@angular/core';
+import { Injectable, computed, signal, inject } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
 import {
   ClusterNode,
   ClusterNodeHealth,
   DashboardKpis,
   HealerEvent,
+  HealerEventWire,
   HealingState,
 } from '../models/healer-event.model';
-
-const initialNodes: ClusterNode[] = [
-  {
-    serviceName: 'aura-api-analyzer',
-    namespace: 'aura-system',
-    health: 'HEALTHY',
-    healingState: 'STABLE',
-    replicas: 2,
-    healthyReplicas: 2,
-    lastAction: 'NONE',
-    lastEventAt: new Date().toISOString(),
-    aiDiagnosis: 'No active anomaly patterns detected.',
-    aiConfidence: 0.99,
-  },
-  {
-    serviceName: 'aura-operator',
-    namespace: 'aura-system',
-    health: 'HEALTHY',
-    healingState: 'STABLE',
-    replicas: 2,
-    healthyReplicas: 2,
-    lastAction: 'NONE',
-    lastEventAt: new Date().toISOString(),
-    aiDiagnosis: 'Control loop operating within expected latency bounds.',
-    aiConfidence: 0.97,
-  },
-  {
-    serviceName: 'payment-service',
-    namespace: 'prod',
-    health: 'DEGRADED',
-    healingState: 'BLOCKED',
-    replicas: 4,
-    healthyReplicas: 3,
-    lastAction: 'RESTART',
-    lastEventAt: new Date().toISOString(),
-    aiDiagnosis: 'Possible memory leak in payment-service pod. Heap growth anomaly observed.',
-    aiConfidence: 0.92,
-  },
-];
+import { firstValueFrom } from 'rxjs';
+import { mapWireEvent } from './event-mapper';
 
 @Injectable({ providedIn: 'root' })
 export class DashboardStoreService {
+  private readonly http = inject(HttpClient);
   private readonly eventsState = signal<HealerEvent[]>([]);
-  private readonly nodesState = signal<Map<string, ClusterNode>>(
-    new Map(initialNodes.map((node) => [this.nodeKey(node.serviceName, node.namespace), node]))
-  );
+  private readonly nodesState = signal<Map<string, ClusterNode>>(new Map());
 
   readonly events = computed(() => this.eventsState());
 
@@ -93,6 +57,20 @@ export class DashboardStoreService {
       processedEventsTrend: this.buildTrend(events, 'processedEvents'),
     };
   });
+
+  async init(): Promise<void> {
+    try {
+      const [nodes, eventsWire] = await Promise.all([
+        firstValueFrom(this.http.get<ClusterNode[]>('/api/dashboard/nodes')),
+        firstValueFrom(this.http.get<HealerEventWire[]>('/api/dashboard/events')),
+      ]);
+
+      this.nodesState.set(new Map(nodes.map((node) => [this.nodeKey(node.serviceName, node.namespace), node])));
+      this.eventsState.set(eventsWire.map(mapWireEvent).slice(0, 100));
+    } catch (error) {
+      console.error('Failed to initialize dashboard state', error);
+    }
+  }
 
   ingestEvent(event: HealerEvent): void {
     this.eventsState.update((current) => [event, ...current].slice(0, 100));

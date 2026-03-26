@@ -12,7 +12,9 @@ import com.auraops.operator.domain.HealingPhase;
 import com.auraops.operator.infrastructure.kubernetes.DeploymentActionExecutor;
 import com.auraops.operator.infrastructure.kubernetes.DeploymentReadinessVerifier;
 import com.auraops.operator.infrastructure.kubernetes.KubernetesTelemetryCollector;
+import com.auraops.operator.infrastructure.observability.PrometheusCollector;
 import com.auraops.operator.infrastructure.realtime.HealerEventPublisher;
+import com.auraops.operator.infrastructure.realtime.HealerEventMessage;
 import io.fabric8.kubernetes.api.model.apps.Deployment;
 import io.fabric8.kubernetes.api.model.apps.ReplicaSet;
 import io.fabric8.kubernetes.client.KubernetesClient;
@@ -53,6 +55,7 @@ public class HealerPolicyReconciler implements Reconciler<HealerPolicy> {
     private final DeploymentActionExecutor actionExecutor;
     private final DeploymentReadinessVerifier readinessVerifier;
     private final HealerEventPublisher healerEventPublisher;
+    private final com.auraops.operator.infrastructure.observability.PrometheusCollector prometheusCollector;
 
     public HealerPolicyReconciler(
         KubernetesClient kubernetesClient,
@@ -63,7 +66,8 @@ public class HealerPolicyReconciler implements Reconciler<HealerPolicy> {
         HealingRateLimiter healingRateLimiter,
         DeploymentActionExecutor actionExecutor,
         DeploymentReadinessVerifier readinessVerifier,
-        HealerEventPublisher healerEventPublisher
+        HealerEventPublisher healerEventPublisher,
+        com.auraops.operator.infrastructure.observability.PrometheusCollector prometheusCollector
     ) {
         this.kubernetesClient = Objects.requireNonNull(kubernetesClient);
         this.telemetryCollector = Objects.requireNonNull(telemetryCollector);
@@ -74,6 +78,7 @@ public class HealerPolicyReconciler implements Reconciler<HealerPolicy> {
         this.actionExecutor = Objects.requireNonNull(actionExecutor);
         this.readinessVerifier = Objects.requireNonNull(readinessVerifier);
         this.healerEventPublisher = Objects.requireNonNull(healerEventPublisher);
+        this.prometheusCollector = Objects.requireNonNull(prometheusCollector);
     }
 
     @Override
@@ -115,9 +120,17 @@ public class HealerPolicyReconciler implements Reconciler<HealerPolicy> {
             return UpdateControl.patchStatus(resource);
         }
 
-        // 1. Handle ongoing verification
+        // 1. Handle ongoing verification or pending approval
         if (isVerifying(resource)) {
             return handleVerification(resource, deployment);
+        }
+        
+        if (isPendingApproval(resource)) {
+            if (resource.getStatus().isApproved()) {
+                log.info("Approval granted for policy {}. Proceeding with action.", resource.getMetadata().getName());
+            } else {
+                return UpdateControl.noUpdate();
+            }
         }
 
         // 2. Telemetry & Analysis
@@ -153,17 +166,28 @@ public class HealerPolicyReconciler implements Reconciler<HealerPolicy> {
             return UpdateControl.patchStatus(resource);
         }
 
-        // 4. Rate Limiting
+        // 4. Approval Check
+        if (resource.getSpec().isApprovalRequired() && !resource.getStatus().isApproved()) {
+            updateStatus(resource, HealingPhase.PENDING_APPROVAL, success.diagnosis(), success.confidence(),
+                "Action %s requires manual approval.".formatted(executableDecision.actionPlan().actionType()), 
+                executableDecision.actionPlan().actionType().name(), null);
+            return UpdateControl.patchStatus(resource);
+        }
+
+        // 5. Rate Limiting
         if (!healingRateLimiter.tryAcquire()) {
             updateStatus(resource, HealingPhase.RATE_LIMITED, success.diagnosis(), success.confidence(),
                 "Healing rate limiter rejected the action to avoid alert storms", "NONE", null);
             return UpdateControl.patchStatus(resource);
         }
 
-        // 5. Execution
+        // 6. Execution
         log.info("Executing healing action {} for deployment {}/{}", 
             executableDecision.actionPlan().actionType(), namespace, targetName);
         actionExecutor.execute(deployment, executableDecision.actionPlan());
+
+        // Reset approval status after execution so next incident requires it again
+        resource.getStatus().setApproved(false);
 
         // Refresh deployment to get the NEW generation after execution
         Deployment refreshedDeployment = kubernetesClient.apps().deployments()
@@ -190,6 +214,10 @@ public class HealerPolicyReconciler implements Reconciler<HealerPolicy> {
 
     private boolean isVerifying(HealerPolicy resource) {
         return resource.getStatus() != null && HealingPhase.VERIFYING.name().equals(resource.getStatus().getPhase());
+    }
+
+    private boolean isPendingApproval(HealerPolicy resource) {
+        return resource.getStatus() != null && HealingPhase.PENDING_APPROVAL.name().equals(resource.getStatus().getPhase());
     }
 
     private UpdateControl<HealerPolicy> handleVerification(HealerPolicy resource, Deployment deployment) {
@@ -257,7 +285,22 @@ public class HealerPolicyReconciler implements Reconciler<HealerPolicy> {
             namespace,
             message,
             diagnosis,
-            healthScore
+            healthScore,
+            calculateDashboardMetrics()
+        );
+    }
+
+    private HealerEventMessage.Metrics calculateDashboardMetrics() {
+        // Query global metrics for the dashboard KPIs
+        // We aggregate across all services to get a cluster-wide health overview
+        Double p95 = prometheusCollector.getP95Latency(".*", ".*");
+        Double errorRate = prometheusCollector.getErrorRate(".*", ".*");
+        Double automationSuccess = 1.0 - (errorRate != null ? errorRate : 0.0);
+        
+        return new HealerEventMessage.Metrics(
+            p95,
+            0, // Open incidents count is calculated by the frontend from event history
+            automationSuccess
         );
     }
 

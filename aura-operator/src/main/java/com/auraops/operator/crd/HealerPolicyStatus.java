@@ -8,9 +8,15 @@ public class HealerPolicyStatus {
     private String message;
     private String lastAction;
     private String aiDiagnosis;
+
+    private boolean approved = false;
+
     private Double healthScore;
+
     private String observedDeployment;
+
     private Long expectedGeneration;
+
     private OffsetDateTime timestamp;
 
     public String getPhase() {
@@ -43,6 +49,14 @@ public class HealerPolicyStatus {
 
     public void setAiDiagnosis(String aiDiagnosis) {
         this.aiDiagnosis = aiDiagnosis;
+    }
+
+    public boolean isApproved() {
+        return approved;
+    }
+
+    public void setApproved(boolean approved) {
+        this.approved = approved;
     }
 
     public Double getHealthScore() {

@@ -49,6 +49,7 @@ public class TempoTraceCollector {
                 .uri(uriBuilder -> uriBuilder
                     .path(properties.getTempo().getSearchPath())
                     .queryParam("start", start.getEpochSecond())
+                    .queryParam("end", Instant.now().getEpochSecond())
                     .queryParam("limit", properties.getTempo().getLimit())
                     .queryParam("tags", "resource.namespace.name=" + namespace + " service.name=" + deploymentName)
                     .build())

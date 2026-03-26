@@ -13,6 +13,7 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: aura-api-analyzer
+        sidecar.istio.io/inject: "true"
       annotations:
         vault.hashicorp.com/agent-inject: "true"
         vault.hashicorp.com/role: "aura-api-analyzer"
@@ -36,6 +37,10 @@ spec:
               value: ollama
             - name: OLLAMA_BASE_URL
               value: http://ollama.ollama.svc.cluster.local:11434
+            - name: SPRING_AI_VECTOR_STORE_QDRANT_HOST
+              value: qdrant.auraops-system.svc.cluster.local
+            - name: SPRING_AI_VECTOR_STORE_QDRANT_PORT
+              value: "6334"
             - name: SPRING_CONFIG_IMPORT
               value: optional:file:/vault/secrets/application.properties
           readinessProbe:

@@ -11,7 +11,6 @@ spring:
         speech: none
         transcription: none
       chat: openai
-      embedding: none
       image: none
       moderation: none
     chat:
@@ -32,6 +31,9 @@ spring:
     ollama:
       base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
       chat:
+        options:
+          model: llama3.1
+      embedding:
         options:
           model: llama3.1
       init:
@@ -60,7 +62,16 @@ spring:
       on-profile: openai
   ai:
     model:
-      chat: openai
+      embedding: openai
+    openai:
+      embedding:
+        enabled: true
+    ollama:
+      embedding:
+        enabled: false
+    anthropic:
+      embedding:
+        enabled: false
 ---
 spring:
   config:
@@ -68,12 +79,31 @@ spring:
       on-profile: anthropic
   ai:
     model:
-      chat: anthropic
+      embedding: openai
+    anthropic:
+      embedding:
+        enabled: false
+    openai:
+      embedding:
+        enabled: true
+    ollama:
+      embedding:
+        enabled: false
 ---
 spring:
   config:
     activate:
       on-profile: ollama
   ai:
+    ollama:
+      embedding:
+        enabled: true
+    openai:
+      embedding:
+        enabled: false
+    anthropic:
+      embedding:
+        enabled: false
     model:
       chat: ollama
+      embedding: ollama

@@ -1,5 +1,6 @@
 package com.auraops.operator.infrastructure.realtime;
 
+import com.auraops.operator.application.DashboardService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -16,9 +17,11 @@ public class HealerEventPublisher {
     private static final Logger log = LoggerFactory.getLogger(HealerEventPublisher.class);
 
     private final SimpMessagingTemplate messagingTemplate;
+    private final DashboardService dashboardService;
 
-    public HealerEventPublisher(SimpMessagingTemplate messagingTemplate) {
+    public HealerEventPublisher(SimpMessagingTemplate messagingTemplate, DashboardService dashboardService) {
         this.messagingTemplate = Objects.requireNonNull(messagingTemplate);
+        this.dashboardService = Objects.requireNonNull(dashboardService);
     }
 
     public void publish(
@@ -30,7 +33,8 @@ public class HealerEventPublisher {
         String namespace,
         String details,
         String aiDiagnosis,
-        Double aiConfidence
+        Double aiConfidence,
+        HealerEventMessage.Metrics metrics
     ) {
         var payload = new HealerEventMessage(
             eventType,
@@ -42,9 +46,11 @@ public class HealerEventPublisher {
             namespace,
             details,
             aiDiagnosis,
-            aiConfidence
+            aiConfidence,
+            metrics
         );
 
+        dashboardService.addEvent(payload);
         messagingTemplate.convertAndSend("/topic/healer-events", payload);
         log.debug("Published healer event {} for policy {}", eventType, policy);
     }

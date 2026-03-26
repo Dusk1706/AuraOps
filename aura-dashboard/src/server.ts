@@ -1,7 +1,6 @@
 import { APP_BASE_HREF } from '@angular/common';
 import { CommonEngine, isMainModule } from '@angular/ssr/node';
 import express from 'express';
-import { createProxyMiddleware } from 'http-proxy-middleware';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import bootstrap from './main.server';
@@ -11,17 +10,9 @@ const browserDistFolder = resolve(serverDistFolder, '../browser');
 const indexHtml = join(serverDistFolder, 'index.server.html');
 
 const app = express();
-const commonEngine = new CommonEngine();
-const operatorWsBaseUrl = process.env['AURAOPS_OPERATOR_WS_BASE_URL'] ?? 'http://aura-operator:8080';
-
-app.use(
-  createProxyMiddleware({
-    target: operatorWsBaseUrl,
-    changeOrigin: true,
-    ws: true,
-    pathFilter: '/ws-native',
-  }),
-);
+const commonEngine = new CommonEngine({
+  allowedHosts: ['localhost', 'aura-dashboard']
+});
 
 /**
  * Example Express Rest API endpoints can be defined here.
@@ -49,7 +40,7 @@ app.get(
 /**
  * Handle all other requests by rendering the Angular application.
  */
-app.get('**', (req, res, next) => {
+app.get('**', (req: express.Request, res: express.Response, next: express.NextFunction) => {
   const { protocol, originalUrl, baseUrl, headers } = req;
 
   commonEngine
@@ -60,8 +51,8 @@ app.get('**', (req, res, next) => {
       publicPath: browserDistFolder,
       providers: [{ provide: APP_BASE_HREF, useValue: baseUrl }],
     })
-    .then((html) => res.send(html))
-    .catch((err) => next(err));
+    .then((html: string) => res.send(html))
+    .catch((err: Error) => next(err));
 });
 
 /**

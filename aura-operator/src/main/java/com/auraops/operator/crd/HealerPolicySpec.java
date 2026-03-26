@@ -17,6 +17,8 @@ public class HealerPolicySpec {
     @DecimalMax("1.0")
     private double aiConfidenceThreshold = 0.95;
 
+    private boolean approvalRequired = false;
+
     @Valid
     private List<HealingStrategySpec> strategies = new ArrayList<>();
 
@@ -34,6 +36,14 @@ public class HealerPolicySpec {
 
     public void setAiConfidenceThreshold(double aiConfidenceThreshold) {
         this.aiConfidenceThreshold = aiConfidenceThreshold;
+    }
+
+    public boolean isApprovalRequired() {
+        return approvalRequired;
+    }
+
+    public void setApprovalRequired(boolean approvalRequired) {
+        this.approvalRequired = approvalRequired;
     }
 
     public List<HealingStrategySpec> getStrategies() {

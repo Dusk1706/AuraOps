@@ -19,6 +19,14 @@
             <span class="severity" [ngClass]="severityClass(event.severity)">{{ event.severity }}</span>
             <span>{{ event.policy }} | {{ event.action }}</span>
           </p>
+          @if (isPendingApproval(event)) {
+            <div class="approval-actions">
+              <button mat-flat-button color="primary" (click)="approveAction(event)">
+                <mat-icon>check_circle</mat-icon>
+                Approve & Execute Action
+              </button>
+            </div>
+          }
           @if (event.aiDiagnosis || event.details) {
             <p class="event-details">{{ event.aiDiagnosis ?? event.details }}</p>
           }

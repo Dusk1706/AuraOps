@@ -67,6 +67,26 @@
   font-size: 0.78rem;
 }
 
+.approval-actions {
+  margin-top: 10px;
+  
+  button {
+    font-size: 0.75rem;
+    height: 32px;
+    line-height: 32px;
+    background: #3b82f6;
+    color: white;
+    border-radius: 8px;
+    
+    mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+      margin-right: 4px;
+    }
+  }
+}
+
 .severity {
   padding: 2px 8px;
   border-radius: 999px;

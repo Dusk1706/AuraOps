@@ -27,7 +27,7 @@ export interface HealerEvent {
 }
 
 export type ClusterNodeHealth = 'HEALTHY' | 'DEGRADED' | 'CRITICAL' | 'UNKNOWN';
-export type HealingState = 'STABLE' | 'HEALING' | 'BLOCKED';
+export type HealingState = 'STABLE' | 'HEALING' | 'BLOCKED' | 'PENDING_APPROVAL';
 
 export interface ClusterNode {
   serviceName: string;

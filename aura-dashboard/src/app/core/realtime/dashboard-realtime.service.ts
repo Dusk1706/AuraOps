@@ -8,6 +8,7 @@ import {
 import { HealerEventWire } from '../models/healer-event.model';
 import { mapWireEvent } from './event-mapper';
 import { DashboardStoreService } from './dashboard-store.service';
+import { NotificationService } from '../services/notification.service';
 
 @Injectable({ providedIn: 'root' })
 export class DashboardRealtimeService {
@@ -15,6 +16,7 @@ export class DashboardRealtimeService {
   private readonly platformId = inject(PLATFORM_ID);
   private readonly config = inject<DashboardRealtimeConfig>(DASHBOARD_REALTIME_CONFIG);
   private readonly store = inject(DashboardStoreService);
+  private readonly notifications = inject(NotificationService);
 
   private client?: Client;
   private started = false;
@@ -30,7 +32,9 @@ export class DashboardRealtimeService {
       return;
     }
 
-    this.startStompStream();
+    this.store.init().then(() => {
+      this.startStompStream();
+    });
   }
 
   reconnect(): void {
@@ -48,16 +52,21 @@ export class DashboardRealtimeService {
       brokerURL,
       onConnect: () => {
         this.store.setConnectionLabel('CONNECTED');
+        this.notifications.success('Dashboard live connection established.');
+        this.store.init(); // Catch up on missed events and node state
         client.subscribe(this.config.topic, (message) => this.onMessage(message));
       },
-      onStompError: () => {
+      onStompError: (frame) => {
         this.store.setConnectionLabel('DISCONNECTED');
+        this.notifications.error(`Real-time protocol error: ${frame.headers['message']}`);
       },
       onWebSocketClose: () => {
         this.store.setConnectionLabel('DISCONNECTED');
+        // No error here, could be a normal close. The client will auto-reconnect.
       },
-      onWebSocketError: () => {
+      onWebSocketError: (event) => {
         this.store.setConnectionLabel('DISCONNECTED');
+        this.notifications.error('WebSocket connection failed. Retrying...');
       },
     });
 
@@ -95,6 +104,7 @@ export class DashboardRealtimeService {
     try {
       this.store.ingestEvent(mapWireEvent(payload));
     } catch (error) {
+      this.notifications.error('Received malformed healer event. Data might be out of sync.');
       console.error('Received invalid healer event payload', error, payload);
     }
   }

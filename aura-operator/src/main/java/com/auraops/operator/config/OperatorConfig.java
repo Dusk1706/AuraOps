@@ -49,6 +49,19 @@ public class OperatorConfig {
             .build();
     }
 
+    @Bean
+    @Qualifier("prometheusRestClient")
+    RestClient prometheusRestClient(RestClient.Builder builder, ObservabilityProperties properties) {
+        JdkClientHttpRequestFactory requestFactory = requestFactory(
+            properties.getPrometheus().getConnectTimeout(),
+            properties.getPrometheus().getReadTimeout()
+        );
+        return builder
+            .baseUrl(properties.getPrometheus().getBaseUrl())
+            .requestFactory(requestFactory)
+            .build();
+    }
+
     private JdkClientHttpRequestFactory requestFactory(java.time.Duration connectTimeout, java.time.Duration readTimeout) {
         HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(connectTimeout)
